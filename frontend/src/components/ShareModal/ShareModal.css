@@ -1,0 +1,118 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: overlayIn 0.2s ease;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: modalIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+.modal-close:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-section { display: flex; flex-direction: column; gap: 8px; }
+
+.modal-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.url-row { display: flex; gap: 8px; }
+
+.url-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 9px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.copy-btn {
+  padding: 9px 16px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+.copy-btn:hover { background: var(--accent-hover); }
+.copy-btn.copied { background: var(--success); }
+
+.modal-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.room-id-display {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+}
+
+.room-id-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--accent);
+}

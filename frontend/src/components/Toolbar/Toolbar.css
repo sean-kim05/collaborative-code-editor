@@ -1,14 +1,14 @@
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 12px;
-  background: var(--bg-toolbar);
+  height: 48px;
+  padding: 0 16px;
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   gap: 12px;
   flex-shrink: 0;
-  overflow: hidden;
+  position: relative;
+  z-index: 50;
 }
 
 .toolbar-left, .toolbar-right, .toolbar-center {
@@ -17,175 +17,235 @@
   gap: 8px;
 }
 
-.toolbar-logo {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.toolbar-right { margin-left: auto; }
 
-.logo-icon { font-size: 16px; }
-
-.logo-text {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-
-.toolbar-divider {
+.tb-sep {
   width: 1px;
   height: 20px;
   background: var(--border);
+  flex-shrink: 0;
 }
 
-.room-id-display {
+/* Logo */
+.tb-logo {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
+  flex-shrink: 0;
 }
 
-.room-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.08em;
-}
-
-.room-id {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.icon-btn {
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 3px 6px;
-  border-radius: 4px;
+.tb-logo-icon {
+  width: 24px;
+  height: 24px;
+  background: var(--accent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
-  transition: background 0.15s, color 0.15s;
 }
 
-.icon-btn:hover {
-  background: var(--bg-elevated);
+.tb-logo-text {
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text-primary);
-  border-color: var(--border);
-}
-
-.lang-select {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 4px 8px;
-  border-radius: 5px;
-  font-size: 12px;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  outline: none;
-}
-
-.font-size-control {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.font-size-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  min-width: 30px;
-  text-align: center;
-}
-
-.run-btn {
-  background: #238636;
-  color: #fff;
-  border: none;
-  padding: 5px 12px;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.run-btn:hover { background: #2ea043; }
-
-.conn-status {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.conn-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.conn-status.connected .conn-dot { background: #22c55e; }
-.conn-status.disconnected .conn-dot { background: #ef4444; }
-
-.conn-label {
-  font-size: 11px;
-  color: var(--text-muted);
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
-.chat-toggle-btn {
-  position: relative;
-  background: none;
-  border: 1px solid transparent;
+/* Room pill */
+.room-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
   cursor: pointer;
-  font-size: 16px;
-  padding: 3px 6px;
-  border-radius: 4px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.room-pill:hover { border-color: var(--text-muted); background: var(--bg-primary); }
+
+.room-pill-id {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
   color: var(--text-secondary);
 }
 
-.chat-toggle-btn:hover {
-  background: var(--bg-elevated);
-  border-color: var(--border);
+.room-pill-copy {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
-.badge {
+/* Language picker */
+.lang-picker { position: relative; }
+
+.lang-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.lang-btn:hover { border-color: var(--text-muted); }
+
+.lang-chevron { font-size: 10px; color: var(--text-muted); }
+
+.lang-dropdown {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 140px;
+  z-index: 100;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  animation: dropdownIn 0.15s ease;
+}
+
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.lang-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  text-align: left;
+}
+.lang-option:hover { background: var(--bg-primary); color: var(--text-primary); }
+.lang-option.active { color: var(--accent); }
+
+.lang-check { font-size: 11px; color: var(--accent); }
+
+/* Font size */
+.font-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.font-btn {
+  padding: 5px 9px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.font-btn:hover { background: var(--bg-primary); color: var(--text-primary); }
+
+.font-val {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Right buttons */
+.tb-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 15px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tb-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+
+.tb-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
   background: var(--accent);
-  color: white;
+  color: #fff;
   font-size: 9px;
   font-weight: 700;
   border-radius: 8px;
   padding: 1px 4px;
   min-width: 14px;
   text-align: center;
+  line-height: 1.4;
 }
 
-.share-btn {
-  background: var(--bg-elevated);
+.tb-share-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
   border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
   color: var(--text-primary);
-  padding: 5px 12px;
-  border-radius: 5px;
-  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tb-share-btn:hover { background: var(--bg-primary); border-color: var(--text-muted); }
+
+.tb-run-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  color: var(--success);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tb-run-btn:hover { background: color-mix(in srgb, var(--success) 25%, transparent); }
+.tb-run-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.run-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--success) 30%, transparent);
+  border-top-color: var(--success);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.tb-leave-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
+  color: var(--error);
+  border-radius: 6px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 0.15s;
 }
-
-.share-btn:hover { background: var(--bg-hover); }
-
-.leave-btn {
-  background: none;
-  border: 1px solid #ef4444;
-  color: #ef4444;
-  padding: 5px 12px;
-  border-radius: 5px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.leave-btn:hover { background: rgba(239,68,68,0.1); }
+.tb-leave-btn:hover { background: color-mix(in srgb, var(--error) 10%, transparent); }

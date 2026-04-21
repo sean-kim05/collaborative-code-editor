@@ -1,6 +1,6 @@
-.file-explorer {
-  width: 180px;
-  background: var(--bg-sidebar);
+.fe {
+  width: 220px;
+  background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -9,24 +9,20 @@
 }
 
 .fe-header {
-  padding: 12px;
-  font-size: 11px;
+  padding: 10px 14px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
-}
-
-.fe-section {
-  padding: 8px 0;
 }
 
 .fe-section-label {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
-  padding: 2px 12px 6px;
+  padding: 10px 14px 4px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -34,16 +30,40 @@
 .fe-file {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
+  gap: 8px;
+  padding: 6px 14px;
   cursor: pointer;
   font-size: 13px;
   color: var(--text-secondary);
-  transition: background 0.1s;
+  transition: background 0.1s, color 0.1s;
+}
+.fe-file:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.fe-file.active { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-primary); }
+
+.fe-file-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
 }
 
-.fe-file:hover { background: var(--bg-hover); }
-.fe-file.active { background: var(--bg-active); color: var(--text-primary); }
+.fe-file-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
 
-.fe-file-icon { font-size: 12px; }
-.fe-file-name { font-family: 'Inter', sans-serif; }
+.fe-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 20px;
+  text-align: center;
+}
+
+.fe-empty-icon { font-size: 20px; opacity: 0.3; }
+.fe-empty-text { font-size: 12px; color: var(--text-muted); }
+.fe-empty-sub { font-size: 11px; color: var(--text-muted); opacity: 0.7; line-height: 1.4; }

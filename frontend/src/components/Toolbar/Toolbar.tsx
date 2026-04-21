@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import UserPresence from '../UserPresence/UserPresence';
 import type { User } from '../../types';
 import './Toolbar.css';
@@ -21,82 +21,96 @@ interface Props {
   onLanguageChange: (lang: string) => void;
   fontSize: number;
   onFontSizeChange: (size: number) => void;
-  theme: 'dark' | 'light';
-  onThemeToggle: () => void;
   users: User[];
   currentSessionId?: string;
-  connected: boolean;
-  chatOpen: boolean;
-  onChatToggle: () => void;
-  unreadCount: number;
   onShare: () => void;
   onRun: () => void;
   onLeave: () => void;
+  onChatToggle: () => void;
+  chatOpen: boolean;
+  unreadCount: number;
+  running: boolean;
 }
 
 export default function Toolbar({
   roomId, language, onLanguageChange, fontSize, onFontSizeChange,
-  theme, onThemeToggle, users, currentSessionId, connected,
-  chatOpen, onChatToggle, unreadCount, onShare, onRun, onLeave,
+  users, currentSessionId, onShare, onRun, onLeave,
+  onChatToggle, chatOpen, unreadCount, running,
 }: Props) {
+  const [langOpen, setLangOpen] = useState(false);
+  const [roomCopied, setRoomCopied] = useState(false);
+
   function copyRoomId() {
     navigator.clipboard.writeText(roomId);
+    setRoomCopied(true);
+    setTimeout(() => setRoomCopied(false), 1500);
   }
+
+  const currentLang = LANGUAGES.find((l) => l.value === language)?.label || language;
 
   return (
     <div className="toolbar">
       <div className="toolbar-left">
-        <div className="toolbar-logo">
-          <span className="logo-icon">⌨</span>
-          <span className="logo-text">CollabCode</span>
+        <div className="tb-logo">
+          <div className="tb-logo-icon">⌨</div>
+          <span className="tb-logo-text">CollabCode</span>
         </div>
-        <div className="toolbar-divider" />
-        <div className="room-id-display">
-          <span className="room-label">ROOM</span>
-          <code className="room-id">{roomId.slice(0, 8)}</code>
-          <button className="icon-btn" onClick={copyRoomId} title="Copy room ID">⧉</button>
-        </div>
+        <div className="tb-sep" />
+        <button className="room-pill" onClick={copyRoomId}>
+          <span className="room-pill-id">{roomId.slice(0, 8)}</span>
+          <span className="room-pill-copy">{roomCopied ? '✓' : '⧉'}</span>
+        </button>
       </div>
 
       <div className="toolbar-center">
-        <select
-          className="lang-select"
-          value={language}
-          onChange={(e) => onLanguageChange(e.target.value)}
-        >
-          {LANGUAGES.map((l) => (
-            <option key={l.value} value={l.value}>{l.label}</option>
-          ))}
-        </select>
-
-        <div className="font-size-control">
-          <button className="icon-btn" onClick={() => onFontSizeChange(Math.max(10, fontSize - 1))}>−</button>
-          <span className="font-size-label">{fontSize}px</span>
-          <button className="icon-btn" onClick={() => onFontSizeChange(Math.min(24, fontSize + 1))}>+</button>
+        <div className="lang-picker">
+          <button className="lang-btn" onClick={() => setLangOpen((o) => !o)}>
+            <span>{currentLang}</span>
+            <span className="lang-chevron">▾</span>
+          </button>
+          {langOpen && (
+            <div className="lang-dropdown">
+              {LANGUAGES.map((l) => (
+                <button
+                  key={l.value}
+                  className={`lang-option ${l.value === language ? 'active' : ''}`}
+                  onClick={() => { onLanguageChange(l.value); setLangOpen(false); }}
+                >
+                  {l.label}
+                  {l.value === language && <span className="lang-check">✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <button className="icon-btn" onClick={onThemeToggle} title="Toggle theme">
-          {theme === 'dark' ? '☀' : '🌙'}
-        </button>
-
-        <button className="run-btn" onClick={onRun}>▶ Run</button>
+        <div className="font-ctrl">
+          <button className="font-btn" onClick={() => onFontSizeChange(Math.max(10, fontSize - 1))}>−</button>
+          <span className="font-val">{fontSize}</span>
+          <button className="font-btn" onClick={() => onFontSizeChange(Math.min(24, fontSize + 1))}>+</button>
+        </div>
       </div>
 
       <div className="toolbar-right">
-        <div className={`conn-status ${connected ? 'connected' : 'disconnected'}`}>
-          <span className="conn-dot" />
-          <span className="conn-label">{connected ? 'Connected' : 'Reconnecting…'}</span>
-        </div>
-
         <UserPresence users={users} currentSessionId={currentSessionId} />
 
-        <button className="chat-toggle-btn" onClick={onChatToggle} title="Toggle chat">
+        <div className="tb-sep" />
+
+        <button className="tb-btn" onClick={onChatToggle}>
           💬
-          {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+          {unreadCount > 0 && <span className="tb-badge">{unreadCount}</span>}
         </button>
 
-        <button className="share-btn" onClick={onShare}>Share</button>
-        <button className="leave-btn" onClick={onLeave}>Leave</button>
+        <button className="tb-share-btn" onClick={onShare}>
+          <span>↗</span> Share
+        </button>
+
+        <button className={`tb-run-btn ${running ? 'running' : ''}`} onClick={onRun} disabled={running}>
+          {running ? <span className="run-spinner" /> : '▶'}
+          {running ? 'Running…' : 'Run'}
+        </button>
+
+        <button className="tb-leave-btn" onClick={onLeave}>Leave</button>
       </div>
     </div>
   );
