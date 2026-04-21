@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Sparkles, X, Trash2, Lightbulb, Wrench, Wand2, Zap, FileCode, Rows3, ArrowUpToLine, Send } from 'lucide-react';
+import { Sparkles, X, Trash2, Lightbulb, Wrench, Wand2, Zap, FileCode, Rows3, ArrowUpToLine, Send, RefreshCw } from 'lucide-react';
 import './AIAssistant.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
@@ -43,6 +43,7 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
   const [input, setInput] = useState('');
   const [errorInput, setErrorInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [lastRequestArgs, setLastRequestArgs] = useState<string | null>(null);
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -59,6 +60,7 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
 
     setIsStreaming(true);
     setInput('');
+    setLastRequestArgs(userPrompt);
 
     const userLabel = mode === 'generate' ? userPrompt
       : mode === 'fix' ? `Fix bug${errorInput ? `: ${errorInput}` : ''}`
@@ -145,6 +147,13 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
     }
   }, [mode, code, selection, language, errorInput, input, isStreaming]);
 
+  function retryLast() {
+    if (!lastRequestArgs || isStreaming) return;
+    setMessages(prev => prev.slice(0, -2));
+    historyRef.current = historyRef.current.slice(0, -2);
+    sendRequest(lastRequestArgs === '' ? undefined : lastRequestArgs);
+  }
+
   function clearChat() {
     setMessages([]);
     historyRef.current = [];
@@ -210,6 +219,11 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
                   <pre className="ai-msg-text">{display}{msg.isStreaming && <span className="ai-cursor">▋</span>}</pre>
                 )}
               </div>
+              {msg.isError && !msg.isStreaming && (
+                <button className="ai-retry-btn" onClick={retryLast}>
+                  <RefreshCw size={11} /> Retry
+                </button>
+              )}
               {extractedCode && !msg.isStreaming && (
                 <button className="ai-apply-btn" onClick={() => onApply(extractedCode)}>
                   <ArrowUpToLine size={12} /> Apply to editor

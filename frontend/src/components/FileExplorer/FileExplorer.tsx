@@ -147,8 +147,10 @@ export default function FileExplorer({
 }: Props) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newNameError, setNewNameError] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState('');
+  const [renameError, setRenameError] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fileId: string } | null>(null);
   const newInputRef = useRef<HTMLInputElement>(null);
 
@@ -158,22 +160,37 @@ export default function FileExplorer({
     setTimeout(() => newInputRef.current?.focus(), 50);
   }
 
+  function validateName(name: string): string {
+    if (!name.trim()) return 'File name cannot be empty';
+    if (/[/\\:*?"<>|]/.test(name)) return 'Invalid characters in file name';
+    if (name.trim().startsWith('.') && name.trim().length === 1) return 'Invalid file name';
+    return '';
+  }
+
   function confirmCreate() {
     const name = newName.trim();
-    if (name) onCreateFile(name, getLanguage(name));
+    const err = validateName(name);
+    if (err) { setNewNameError(err); return; }
+    onCreateFile(name, getLanguage(name));
     setCreating(false);
     setNewName('');
+    setNewNameError('');
   }
 
   function startRename(file: FileNode) {
     setContextMenu(null);
     setRenamingId(file.id);
     setRenameVal(file.name);
+    setRenameError('');
   }
 
   function confirmRename() {
-    if (renamingId && renameVal.trim()) onRenameFile(renamingId, renameVal.trim());
+    const name = renameVal.trim();
+    const err = validateName(name);
+    if (err) { setRenameError(err); return; }
+    if (renamingId) onRenameFile(renamingId, name);
     setRenamingId(null);
+    setRenameError('');
   }
 
   function handleContext(e: React.MouseEvent, fileId: string) {
@@ -200,13 +217,15 @@ export default function FileExplorer({
               {renamingId === file.id ? (
                 <div className="fe-file-rename">
                   <input
-                    className="fe-rename-input"
+                    className={`fe-rename-input ${renameError ? 'fe-input-error' : ''}`}
                     value={renameVal}
                     autoFocus
-                    onChange={e => setRenameVal(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') confirmRename(); if (e.key === 'Escape') setRenamingId(null); }}
+                    onChange={e => { setRenameVal(e.target.value); setRenameError(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmRename(); if (e.key === 'Escape') { setRenamingId(null); setRenameError(''); } }}
                     onBlur={confirmRename}
+                    title={renameError || undefined}
                   />
+                  {renameError && <div className="fe-input-error-msg">{renameError}</div>}
                 </div>
               ) : (
                 <div
@@ -234,13 +253,15 @@ export default function FileExplorer({
           <div className="fe-file-rename">
             <input
               ref={newInputRef}
-              className="fe-rename-input"
+              className={`fe-rename-input ${newNameError ? 'fe-input-error' : ''}`}
               value={newName}
               placeholder="filename.js"
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') setCreating(false); }}
-              onBlur={confirmCreate}
+              onChange={e => { setNewName(e.target.value); setNewNameError(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') { setCreating(false); setNewNameError(''); } }}
+              onBlur={() => { if (!newName.trim()) { setCreating(false); setNewNameError(''); } else confirmCreate(); }}
+              title={newNameError || undefined}
             />
+            {newNameError && <div className="fe-input-error-msg">{newNameError}</div>}
           </div>
         )}
       </div>

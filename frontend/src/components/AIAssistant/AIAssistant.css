@@ -280,3 +280,19 @@
   display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.ai-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
+  color: var(--error);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ai-retry-btn:hover { background: color-mix(in srgb, var(--error) 20%, transparent); }

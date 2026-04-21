@@ -206,3 +206,62 @@
   flex-shrink: 0;
   font-style: italic;
 }
+
+.editor-following {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: -2px;
+}
+
+.room-error {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.room-error-icon { font-size: 36px; }
+
+.room-error-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.room-error-msg {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 400px;
+}
+
+.room-error-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.room-error-btn {
+  padding: 8px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.room-error-btn:hover { background: var(--accent-hover); }
+
+.room-error-ghost {
+  padding: 8px 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.room-error-ghost:hover { color: var(--text-primary); }
