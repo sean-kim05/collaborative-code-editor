@@ -1,0 +1,49 @@
+.file-explorer {
+  width: 180px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.fe-header {
+  padding: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.fe-section {
+  padding: 8px 0;
+}
+
+.fe-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 2px 12px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fe-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: background 0.1s;
+}
+
+.fe-file:hover { background: var(--bg-hover); }
+.fe-file.active { background: var(--bg-active); color: var(--text-primary); }
+
+.fe-file-icon { font-size: 12px; }
+.fe-file-name { font-family: 'Inter', sans-serif; }
