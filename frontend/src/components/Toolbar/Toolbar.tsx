@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Code2, Copy, Check, ChevronDown, Sparkles, History, MessageSquare, Share2, Play, LogOut, Minus, Plus } from 'lucide-react';
+import { Code2, Copy, Check, ChevronDown, Sparkles, History, MessageSquare, Share2, Play, LogOut, Minus, Plus, EyeOff } from 'lucide-react';
 import UserPresence from '../UserPresence/UserPresence';
 import type { User } from '../../types';
 import './Toolbar.css';
@@ -35,6 +35,9 @@ interface Props {
   aiOpen: boolean;
   onHistoryToggle: () => void;
   historyOpen: boolean;
+  followingUser?: User | null;
+  onFollow?: (sessionId: string | null) => void;
+  onStopFollow?: () => void;
 }
 
 export default function Toolbar({
@@ -42,6 +45,7 @@ export default function Toolbar({
   users, currentSessionId, onShare, onRun, onLeave,
   onChatToggle, unreadCount, running,
   onAIToggle, aiOpen, onHistoryToggle, historyOpen,
+  followingUser, onFollow, onStopFollow,
 }: Props) {
   const [langOpen, setLangOpen] = useState(false);
   const [roomCopied, setRoomCopied] = useState(false);
@@ -100,7 +104,17 @@ export default function Toolbar({
       </div>
 
       <div className="toolbar-right">
-        <UserPresence users={users} currentSessionId={currentSessionId} />
+        {followingUser && (
+          <button className="tb-following-chip" onClick={onStopFollow} title="Stop following">
+            <EyeOff size={12} /> Following {followingUser.username}
+          </button>
+        )}
+        <UserPresence
+          users={users}
+          currentSessionId={currentSessionId}
+          followingUserId={followingUser?.session_id ?? null}
+          onFollow={onFollow}
+        />
         <div className="tb-sep" />
 
         <button

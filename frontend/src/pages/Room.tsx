@@ -17,7 +17,7 @@ import { getUserColor } from '../utils/userColors';
 import './Room.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
-const AUTO_SNAPSHOT_INTERVAL = 2 * 60 * 1000; // 2 minutes
+const AUTO_SNAPSHOT_INTERVAL = 2 * 60 * 1000;
 
 function getUsername(): string {
   const stored = localStorage.getItem('collab_username');
@@ -31,11 +31,9 @@ export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
 
-  // File system
   const [fs, setFs] = useState<FileSystem>({ files: [], activeFileId: '' });
   const fsRef = useRef<FileSystem>({ files: [], activeFileId: '' });
 
-  // Active file content shortcut
   const activeFile = fs.files.find(f => f.id === fs.activeFileId) || fs.files[0];
   const activeCode = activeFile?.content || '';
   const activeLanguage = activeFile?.language || 'javascript';
@@ -50,6 +48,7 @@ export default function Room() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState<{ stdout: string; stderr: string; elapsed_ms: number } | null>(null);
@@ -61,6 +60,7 @@ export default function Room() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [currentSelection, setCurrentSelection] = useState('');
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [followingUserId, setFollowingUserId] = useState<string | null>(null);
 
   const { toasts, addToast, dismiss } = useToasts();
   const socketRef = useRef<Socket | null>(null);
@@ -71,6 +71,18 @@ export default function Room() {
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSnapshotRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const outputDragRef = useRef<{ startY: number; startH: number } | null>(null);
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Dynamic page title
+  useEffect(() => {
+    document.title = roomId ? `CollabCode — ${roomId}` : 'CollabCode';
+    return () => { document.title = 'CollabCode'; };
+  }, [roomId]);
+
+  // Sync language selector when active file changes
+  useEffect(() => {
+    if (activeFile?.language) setLanguage(activeFile.language);
+  }, [fs.activeFileId]);
 
   // Keep fsRef in sync for socket callbacks
   useEffect(() => { fsRef.current = fs; }, [fs]);
@@ -91,15 +103,30 @@ export default function Room() {
     return () => { if (autoSnapshotRef.current) clearInterval(autoSnapshotRef.current); };
   }, [roomId]);
 
+  // Room exists check + socket setup
   useEffect(() => {
     if (!roomId) return;
+
+    // 10s loading timeout
+    loadTimeoutRef.current = setTimeout(() => {
+      setLoadError('Server unavailable — could not connect. Is the backend running?');
+      setLoading(false);
+    }, 10000);
+
     const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
     socket.on('connect', () => {
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
       setConnected(true);
       sessionIdRef.current = socket.id || null;
       socket.emit('join_room', { room_id: roomId, username: usernameRef.current, color: colorRef.current });
+    });
+
+    socket.on('connect_error', () => {
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+      setLoadError('Server unavailable — trying to reconnect…');
+      setLoading(false);
     });
 
     socket.on('disconnect', () => {
@@ -113,10 +140,12 @@ export default function Room() {
     });
 
     socket.on('room_state', (data: { fs: FileSystem; users: User[] }) => {
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
       setFs(data.fs);
       setUsers(data.users);
       if (data.fs.files[0]) setLanguage(data.fs.files[0].language);
       setLoading(false);
+      setLoadError(null);
     });
 
     socket.on('user_list', (data: { users: User[] }) => setUsers(data.users));
@@ -129,6 +158,7 @@ export default function Room() {
       setRemoteCursors(prev => prev.filter(c => c.session_id !== data.session_id));
       setRemoteSelections(prev => prev.filter(s => s.session_id !== data.session_id));
       setTypingUsers(prev => prev.filter(u => u.session_id !== data.session_id));
+      setFollowingUserId(prev => prev === data.session_id ? null : prev);
     });
 
     socket.on('code_change', (data: { file_id: string; content: string }) => {
@@ -146,6 +176,13 @@ export default function Room() {
       setRemoteCursors(prev => {
         const filtered = prev.filter(c => c.session_id !== data.session_id);
         return [...filtered, { session_id: data.session_id, username: data.username, color: data.color, position: data.cursor_position }];
+      });
+      // Follow mode: scroll editor to followed user's cursor
+      setFollowingUserId(prevFollowing => {
+        if (prevFollowing === data.session_id && editorRef.current) {
+          editorRef.current.revealLine(data.cursor_position.lineNumber);
+        }
+        return prevFollowing;
       });
     });
 
@@ -172,6 +209,7 @@ export default function Room() {
     });
 
     return () => {
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
       socket.emit('leave_room', { room_id: roomId });
       socket.disconnect();
     };
@@ -183,10 +221,8 @@ export default function Room() {
       if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); setChatOpen(o => !o); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleRun(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); setAiOpen(o => !o); }
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        saveManualSnapshot();
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveManualSnapshot(); }
+      if (e.key === 'Escape') setFollowingUserId(null);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -200,7 +236,6 @@ export default function Room() {
     }));
     socketRef.current?.emit('code_change', { room_id: roomId, file_id: fileId, content: newCode });
 
-    // Typing indicator
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     socketRef.current?.emit('typing', { room_id: roomId, session_id: sessionIdRef.current, username: usernameRef.current, color: colorRef.current, isTyping: true });
     typingTimerRef.current = setTimeout(() => {
@@ -278,7 +313,9 @@ export default function Room() {
       try {
         const res = await fetch(`${SOCKET_URL}/api/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: 'python', code: activeCode }) });
         setOutput(await res.json());
-      } catch { setOutput({ stdout: '', stderr: 'Failed to reach server', elapsed_ms: 0 }); }
+      } catch {
+        setOutput({ stdout: '', stderr: 'Could not reach execution server', elapsed_ms: 0 });
+      }
     }
     setRunning(false);
   }, [activeCode, language]);
@@ -306,7 +343,6 @@ export default function Room() {
     addToast('Snapshot restored', 'success');
   }
 
-  // Resizable output panel
   function startOutputDrag(e: React.MouseEvent) {
     outputDragRef.current = { startY: e.clientY, startH: outputHeight };
     const onMove = (ev: MouseEvent) => {
@@ -319,7 +355,23 @@ export default function Room() {
     window.addEventListener('mouseup', onUp);
   }
 
+  const followingUser = users.find(u => u.session_id === followingUserId) ?? null;
+
   if (loading) return <LoadingScreen />;
+
+  if (loadError) {
+    return (
+      <div className="room-error">
+        <div className="room-error-icon">⚠</div>
+        <div className="room-error-title">Could not connect</div>
+        <div className="room-error-msg">{loadError}</div>
+        <div className="room-error-actions">
+          <button className="room-error-btn" onClick={() => window.location.reload()}>Try again</button>
+          <button className="room-error-ghost" onClick={() => navigate('/')}>Go home</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="room">
@@ -335,7 +387,7 @@ export default function Room() {
         onLanguageChange={(lang) => {
           setLanguage(lang);
           const fileId = fs.activeFileId;
-          socketRef.current?.emit('rename_file', { room_id: roomId, file_id: fileId, name: activeFile?.name || 'main' });
+          socketRef.current?.emit('update_file_language', { room_id: roomId, file_id: fileId, language: lang });
         }}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
@@ -352,6 +404,9 @@ export default function Room() {
         aiOpen={aiOpen}
         onHistoryToggle={() => setHistoryOpen(o => !o)}
         historyOpen={historyOpen}
+        followingUser={followingUser}
+        onFollow={(sid) => setFollowingUserId(sid)}
+        onStopFollow={() => setFollowingUserId(null)}
       />
 
       {!welcomeDismissed && (
@@ -403,7 +458,7 @@ export default function Room() {
             ))}
           </div>
 
-          <div className="editor-main">
+          <div className={`editor-main ${followingUserId ? 'editor-following' : ''}`}>
             <Editor
               ref={editorRef}
               value={activeCode}

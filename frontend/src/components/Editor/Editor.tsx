@@ -8,6 +8,7 @@ export interface EditorHandle {
   applyText: (text: string) => void;
   getSelection: () => string;
   insertAtCursor: (text: string) => void;
+  revealLine: (lineNumber: number) => void;
 }
 
 interface Props {
@@ -57,6 +58,9 @@ const Editor = forwardRef<EditorHandle, Props>(function Editor(
       const pos = editor.getPosition();
       if (!pos) return;
       editor.executeEdits('ai', [{ range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column }, text, forceMoveMarkers: true }]);
+    },
+    revealLine(lineNumber: number) {
+      editorRef.current?.revealLineInCenter(lineNumber);
     },
   }));
 
