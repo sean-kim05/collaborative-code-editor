@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X, Check, Copy } from 'lucide-react';
 import './ShareModal.css';
 
 interface Props {
@@ -23,7 +24,7 @@ export default function ShareModal({ roomId, onClose, onCopied }: Props) {
       <div className="modal">
         <div className="modal-header">
           <div className="modal-title">Share room</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}><X size={14} /></button>
         </div>
 
         <div className="modal-body">
@@ -32,7 +33,7 @@ export default function ShareModal({ roomId, onClose, onCopied }: Props) {
             <div className="url-row">
               <input className="url-input" value={url} readOnly />
               <button className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copyUrl}>
-                {copied ? '✓ Copied!' : 'Copy'}
+                {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy</>}
               </button>
             </div>
           </div>

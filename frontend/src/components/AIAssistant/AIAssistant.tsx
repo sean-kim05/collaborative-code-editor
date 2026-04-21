@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Sparkles, X, Trash2, Lightbulb, Wrench, Wand2, Zap, FileCode, Rows3, ArrowUpToLine, Send } from 'lucide-react';
 import './AIAssistant.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
@@ -21,11 +22,11 @@ interface Props {
   onClose: () => void;
 }
 
-const MODES: { key: Mode; label: string; icon: string; hint: string }[] = [
-  { key: 'explain', label: 'Explain', icon: '💡', hint: 'Explains selected code or the whole file' },
-  { key: 'fix',     label: 'Fix Bug',  icon: '🔧', hint: 'Paste an error and get a fix' },
-  { key: 'improve', label: 'Improve',  icon: '✨', hint: 'Refactors for clarity and performance' },
-  { key: 'generate',label: 'Generate', icon: '⚡', hint: 'Describe what to write, AI generates it' },
+const MODES: { key: Mode; label: string; icon: React.ReactElement; hint: string }[] = [
+  { key: 'explain', label: 'Explain',  icon: <Lightbulb size={13} />, hint: 'Explains selected code or the whole file' },
+  { key: 'fix',     label: 'Fix Bug',  icon: <Wrench size={13} />,    hint: 'Paste an error and get a fix' },
+  { key: 'improve', label: 'Improve',  icon: <Wand2 size={13} />,     hint: 'Refactors for clarity and performance' },
+  { key: 'generate',label: 'Generate', icon: <Zap size={13} />,       hint: 'Describe what to write, AI generates it' },
 ];
 
 function extractCodeBlocks(text: string): { display: string; code: string | null } {
@@ -149,18 +150,20 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
     historyRef.current = [];
   }
 
+  const currentMode = MODES.find(m => m.key === mode)!;
+
   return (
     <div className="ai-panel">
       <div className="ai-header">
         <div className="ai-header-left">
-          <span className="ai-sparkle">✦</span>
+          <Sparkles size={14} className="ai-sparkle" />
           <span className="ai-title">AI Assistant</span>
         </div>
         <div className="ai-header-right">
           {messages.length > 0 && (
-            <button className="ai-icon-btn" onClick={clearChat} title="Clear chat">⊘</button>
+            <button className="ai-icon-btn" onClick={clearChat} title="Clear chat"><Trash2 size={13} /></button>
           )}
-          <button className="ai-icon-btn" onClick={onClose} title="Close">✕</button>
+          <button className="ai-icon-btn" onClick={onClose} title="Close"><X size={13} /></button>
         </div>
       </div>
 
@@ -172,7 +175,7 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
             onClick={() => setMode(m.key)}
             title={m.hint}
           >
-            <span>{m.icon}</span>
+            {m.icon}
             <span>{m.label}</span>
           </button>
         ))}
@@ -180,16 +183,16 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
 
       <div className="ai-context-bar">
         {selection ? (
-          <span className="ai-context-badge selection">⬚ {selection.split('\n').length} lines selected</span>
+          <span className="ai-context-badge selection"><Rows3 size={11} /> {selection.split('\n').length} lines selected</span>
         ) : (
-          <span className="ai-context-badge">📄 Full file · {language}</span>
+          <span className="ai-context-badge"><FileCode size={11} /> Full file · {language}</span>
         )}
       </div>
 
       <div className="ai-chat" ref={chatRef}>
         {messages.length === 0 && (
           <div className="ai-empty">
-            <div className="ai-empty-icon">✦</div>
+            <div className="ai-empty-icon"><Sparkles size={28} strokeWidth={1.5} /></div>
             <p>Select code in the editor and ask me to explain, fix, or improve it.</p>
           </div>
         )}
@@ -198,7 +201,7 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
           return (
             <div key={i} className={`ai-msg ai-msg-${msg.role} ${msg.isError ? 'error' : ''}`}>
               {msg.role === 'assistant' && (
-                <div className="ai-msg-label">✦ Claude</div>
+                <div className="ai-msg-label"><Sparkles size={10} /> Claude</div>
               )}
               <div className="ai-msg-body">
                 {msg.isStreaming && !msg.content ? (
@@ -209,7 +212,7 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
               </div>
               {extractedCode && !msg.isStreaming && (
                 <button className="ai-apply-btn" onClick={() => onApply(extractedCode)}>
-                  ↳ Apply to editor
+                  <ArrowUpToLine size={12} /> Apply to editor
                 </button>
               )}
             </div>
@@ -237,7 +240,7 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
               disabled={isStreaming}
             />
             <button className="ai-send-btn" onClick={() => sendRequest()} disabled={isStreaming || !input.trim()}>
-              {isStreaming ? <span className="run-spinner"/> : '↑'}
+              {isStreaming ? <span className="run-spinner"/> : <Send size={13} />}
             </button>
           </div>
         ) : (
@@ -248,7 +251,7 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
           >
             {isStreaming
               ? <><span className="run-spinner"/> Running…</>
-              : <>{MODES.find(m => m.key === mode)?.icon} {MODES.find(m => m.key === mode)?.label} {selection ? 'selection' : 'code'}</>
+              : <>{currentMode.icon} {currentMode.label} {selection ? 'selection' : 'code'}</>
             }
           </button>
         )}

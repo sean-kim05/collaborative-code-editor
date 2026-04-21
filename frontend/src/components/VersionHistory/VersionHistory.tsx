@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { History, X, Plus, RotateCcw } from 'lucide-react';
 import type { Snapshot, SnapshotDetail } from '../../types';
 import './VersionHistory.css';
 
@@ -82,8 +83,8 @@ export default function VersionHistory({ roomId, currentCode, currentFileName, c
   return (
     <div className="vh-panel">
       <div className="vh-header">
-        <span className="vh-title">⏱ Version History</span>
-        <button className="vh-close" onClick={onClose}>✕</button>
+        <span className="vh-title"><History size={14} /> Version History</span>
+        <button className="vh-close" onClick={onClose}><X size={13} /></button>
       </div>
 
       <div className="vh-save-row">
@@ -95,14 +96,14 @@ export default function VersionHistory({ roomId, currentCode, currentFileName, c
           onKeyDown={e => e.key === 'Enter' && saveManual()}
         />
         <button className="vh-save-btn" onClick={saveManual} disabled={saving}>
-          {saving ? '…' : '+ Save'}
+          {saving ? '…' : <><Plus size={12} /> Save</>}
         </button>
       </div>
 
       {selected ? (
         <div className="vh-diff-view">
           <div className="vh-diff-header">
-            <button className="vh-back-btn" onClick={() => setSelected(null)}>← Back</button>
+            <button className="vh-back-btn" onClick={() => setSelected(null)}><RotateCcw size={12} /> Back</button>
             <span className="vh-diff-label">{selected.label || formatDate(selected.created_at)} · {selected.file_name}</span>
             <button className="vh-restore-btn" onClick={() => { onRestore(selected.content); onClose(); }}>
               Restore

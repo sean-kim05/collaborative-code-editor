@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { CheckCircle, Info, AlertTriangle, XCircle, X } from 'lucide-react';
 import './Toast.css';
 
 export type ToastType = 'success' | 'info' | 'warning' | 'error';
@@ -14,11 +15,11 @@ interface ToastProps {
   onDismiss: (id: string) => void;
 }
 
-const ICONS: Record<ToastType, string> = {
-  success: '✓',
-  info: 'ℹ',
-  warning: '⚠',
-  error: '✕',
+const ICONS = {
+  success: <CheckCircle size={14} />,
+  info: <Info size={14} />,
+  warning: <AlertTriangle size={14} />,
+  error: <XCircle size={14} />,
 };
 
 export function ToastContainer({ toasts, onDismiss }: ToastProps) {
@@ -47,7 +48,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
     <div className={`toast toast-${toast.type} ${visible ? 'toast-visible' : ''}`}>
       <span className="toast-icon">{ICONS[toast.type]}</span>
       <span className="toast-message">{toast.message}</span>
-      <button className="toast-close" onClick={() => { setVisible(false); setTimeout(() => onDismiss(toast.id), 300); }}>✕</button>
+      <button className="toast-close" onClick={() => { setVisible(false); setTimeout(() => onDismiss(toast.id), 300); }}><X size={12} /></button>
     </div>
   );
 }
