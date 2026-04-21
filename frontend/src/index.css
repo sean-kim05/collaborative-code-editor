@@ -1,24 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --bg-primary: #0d0d0d;
-  --bg-secondary: #141414;
-  --bg-tertiary: #1a1a1a;
-  --border: #2a2a2a;
-  --accent: #7c6af7;
-  --accent-secondary: #06b6d4;
-  --accent-hover: #9585f8;
-  --text-primary: #e8e8e8;
-  --text-secondary: #888;
-  --text-muted: #555;
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #0f1525;
+  --bg-tertiary: #151d35;
+  --bg-card: #111827;
+  --border: #1e2d4a;
+  --accent: #4f8ef7;
+  --accent-secondary: #60efff;
+  --accent-hover: #6ba3ff;
+  --text-primary: #e8eaf6;
+  --text-secondary: #8892b0;
+  --text-muted: #4a5568;
   --success: #10b981;
   --warning: #f59e0b;
   --error: #ef4444;
-  --info: #06b6d4;
+  --info: #60efff;
 
   /* avatar palette */
-  --avatar-1: #7c6af7;
-  --avatar-2: #06b6d4;
+  --avatar-1: #4f8ef7;
+  --avatar-2: #60efff;
   --avatar-3: #10b981;
   --avatar-4: #f59e0b;
   --avatar-5: #ef4444;
