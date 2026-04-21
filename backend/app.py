@@ -18,11 +18,11 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 
-CORS(app, origins=['http://localhost:5173', 'http://127.0.0.1:5173'])
+CORS(app, origins='*')
 
 socketio = SocketIO(
     app,
-    cors_allowed_origins=['http://localhost:5173', 'http://127.0.0.1:5173'],
+    cors_allowed_origins='*',
     async_mode='eventlet'
 )
 
