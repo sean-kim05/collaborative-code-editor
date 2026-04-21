@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Upload } from 'lucide-react';
 import type { FileNode, User } from '../../types';
 import './FileExplorer.css';
 
@@ -123,12 +124,35 @@ function getLanguage(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
   const map: Record<string, string> = {
     js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
-    py: 'python', java: 'java', cpp: 'cpp', c: 'cpp',
+    py: 'python', java: 'java', cpp: 'cpp', cc: 'cpp', cxx: 'cpp', c: 'cpp',
     html: 'html', css: 'css', json: 'json',
-    go: 'go', rs: 'rust', md: 'markdown',
+    go: 'go', rs: 'rust', md: 'markdown', sh: 'shell', sql: 'sql',
   };
   return map[ext] || 'plaintext';
 }
+
+function getUniqueName(name: string, existingFiles: FileNode[]): string {
+  const existing = new Set(existingFiles.map(f => f.name));
+  if (!existing.has(name)) return name;
+  const dot = name.lastIndexOf('.');
+  const base = dot >= 0 ? name.slice(0, dot) : name;
+  const ext = dot >= 0 ? name.slice(dot) : '';
+  let i = 1;
+  while (existing.has(`${base} (${i})${ext}`)) i++;
+  return `${base} (${i})${ext}`;
+}
+
+function looksLikeBinary(content: string): boolean {
+  const sample = content.slice(0, 8000);
+  for (let i = 0; i < sample.length; i++) {
+    const code = sample.charCodeAt(i);
+    if (code === 0) return true;
+  }
+  const nonPrintable = (sample.match(/[\x01-\x08\x0E-\x1F]/g) || []).length;
+  return nonPrintable / sample.length > 0.05;
+}
+
+const MAX_FILE_SIZE = 500 * 1024; // 500KB
 
 interface Props {
   files: FileNode[];
@@ -139,11 +163,14 @@ interface Props {
   onCreateFile: (name: string, language: string) => void;
   onDeleteFile: (fileId: string) => void;
   onRenameFile: (fileId: string, name: string) => void;
+  onUploadFile: (name: string, language: string, content: string) => void;
+  onToast: (msg: string, type: 'success' | 'error' | 'warning') => void;
 }
 
 export default function FileExplorer({
   files, activeFileId, users, currentSessionId,
   onSwitchFile, onCreateFile, onDeleteFile, onRenameFile,
+  onUploadFile, onToast,
 }: Props) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -152,7 +179,9 @@ export default function FileExplorer({
   const [renameVal, setRenameVal] = useState('');
   const [renameError, setRenameError] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fileId: string } | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const newInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function startCreate() {
     setCreating(true);
@@ -202,12 +231,86 @@ export default function FileExplorer({
     return users.filter(u => u.session_id !== currentSessionId && u.activeFileId === fileId);
   }
 
+  function processFile(file: File) {
+    if (file.size > MAX_FILE_SIZE) {
+      onToast('File too large (max 500KB)', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (looksLikeBinary(content)) {
+        onToast('Only text files are supported', 'error');
+        return;
+      }
+      const uniqueName = getUniqueName(file.name, files);
+      const lang = getLanguage(uniqueName);
+      onUploadFile(uniqueName, lang, content);
+    };
+    reader.onerror = () => onToast('Failed to read file', 'error');
+    reader.readAsText(file);
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+    e.target.value = '';
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) setIsDragOver(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  }
+
   return (
-    <div className="fe" onClick={() => setContextMenu(null)}>
+    <div
+      className={`fe ${isDragOver ? 'fe-drag-over' : ''}`}
+      onClick={() => setContextMenu(null)}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragOver && (
+        <div className="fe-drop-zone">
+          <Upload size={20} />
+          <span>Drop to upload</span>
+        </div>
+      )}
+
       <div className="fe-header">
         <span>Explorer</span>
-        <button className="fe-new-btn" onClick={startCreate} title="New file">+</button>
+        <div className="fe-header-actions">
+          <button
+            className="fe-new-btn"
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload file"
+          >
+            <Upload size={12} />
+          </button>
+          <button className="fe-new-btn" onClick={startCreate} title="New file">+</button>
+        </div>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="fe-hidden-input"
+        accept=".js,.jsx,.ts,.tsx,.py,.java,.cpp,.cc,.html,.css,.go,.rs,.md,.json,.txt,.sh,.yaml,.yml,.env,.gitignore"
+        onChange={handleFileInput}
+      />
 
       <div className="fe-files">
         {files.map(file => {

@@ -72,6 +72,7 @@ export default function Room() {
   const autoSnapshotRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const outputDragRef = useRef<{ startY: number; startH: number } | null>(null);
   const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingUploadRef = useRef<{ name: string; content: string } | null>(null);
 
   // Dynamic page title
   useEffect(() => {
@@ -170,6 +171,21 @@ export default function Room() {
 
     socket.on('fs_update', (data: { fs: FileSystem }) => {
       setFs(data.fs);
+      // After a file upload: find the newly created file by name, then push its content
+      if (pendingUploadRef.current) {
+        const { name, content } = pendingUploadRef.current;
+        const newFile = data.fs.files.find(f => f.name === name);
+        if (newFile) {
+          pendingUploadRef.current = null;
+          socket.emit('code_change', { room_id: roomId, file_id: newFile.id, content });
+          setFs(prev => ({
+            ...prev,
+            files: prev.files.map(f => f.id === newFile.id ? { ...f, content } : f),
+            activeFileId: newFile.id,
+          }));
+          addToast(`Uploaded ${name}`, 'success');
+        }
+      }
     });
 
     socket.on('cursor_move', (data: { session_id: string; username: string; color: string; cursor_position: { lineNumber: number; column: number } }) => {
@@ -269,6 +285,11 @@ export default function Room() {
 
   function handleRenameFile(fileId: string, name: string) {
     socketRef.current?.emit('rename_file', { room_id: roomId, file_id: fileId, name });
+  }
+
+  function handleUploadFile(name: string, lang: string, content: string) {
+    pendingUploadRef.current = { name, content };
+    socketRef.current?.emit('create_file', { room_id: roomId, name, language: lang });
   }
 
   function handleSendMessage(message: string) {
@@ -442,6 +463,8 @@ export default function Room() {
           onCreateFile={handleCreateFile}
           onDeleteFile={handleDeleteFile}
           onRenameFile={handleRenameFile}
+          onUploadFile={handleUploadFile}
+          onToast={addToast}
         />
 
         <div className="editor-area">
