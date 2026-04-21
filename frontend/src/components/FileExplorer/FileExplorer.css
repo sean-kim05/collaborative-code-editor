@@ -23,6 +23,12 @@
   flex-shrink: 0;
 }
 
+.fe-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .fe-new-btn {
   background: transparent;
   border: none;
@@ -30,11 +36,39 @@
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
-  padding: 0 2px;
+  padding: 2px 3px;
   border-radius: 3px;
   transition: color 0.15s;
+  display: flex;
+  align-items: center;
 }
 .fe-new-btn:hover { color: var(--text-primary); }
+
+.fe-hidden-input { display: none; }
+
+.fe-drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -3px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-secondary));
+}
+
+.fe-drop-zone {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+  border-radius: 0;
+}
 
 .fe-files {
   flex: 1;

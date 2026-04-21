@@ -18,6 +18,7 @@ A real-time collaborative code editor — think VS Code meets Google Docs. Multi
 - ✅ Typing indicators
 - ✅ Follow mode — click a user's avatar to follow their cursor (Figma-style)
 - ✅ Language auto-detection from file extension
+- ✅ File upload — drag-and-drop or click-to-upload files from desktop into the editor
 - ✅ PostgreSQL persistence — room state survives server restarts
 
 ---
