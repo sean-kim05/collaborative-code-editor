@@ -2,17 +2,121 @@ import React, { useState, useRef } from 'react';
 import type { FileNode, User } from '../../types';
 import './FileExplorer.css';
 
-const FILE_ICONS: Record<string, string> = {
-  js: '🟨', ts: '🔷', tsx: '🔷', jsx: '🟨',
-  py: '🐍', java: '☕', cpp: '⚙', c: '⚙',
-  html: '🌐', css: '🎨', json: '📋',
-  go: '🐹', rs: '🦀', md: '📝',
-  txt: '📄', sh: '💲', sql: '🗄',
-};
-
-function getIcon(name: string) {
+function FileIcon({ name }: { name: string }) {
   const ext = name.split('.').pop()?.toLowerCase() || '';
-  return FILE_ICONS[ext] || '📄';
+
+  const icons: Record<string, React.ReactElement> = {
+    js: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#F7DF1E"/>
+        <text x="2" y="13" fontSize="9" fontWeight="bold" fontFamily="monospace" fill="#000">JS</text>
+      </svg>
+    ),
+    jsx: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#F7DF1E"/>
+        <text x="1" y="13" fontSize="8" fontWeight="bold" fontFamily="monospace" fill="#000">JSX</text>
+      </svg>
+    ),
+    ts: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#3178C6"/>
+        <text x="2" y="13" fontSize="9" fontWeight="bold" fontFamily="monospace" fill="#fff">TS</text>
+      </svg>
+    ),
+    tsx: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#3178C6"/>
+        <text x="1" y="13" fontSize="8" fontWeight="bold" fontFamily="monospace" fill="#fff">TSX</text>
+      </svg>
+    ),
+    py: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#3776AB"/>
+        <path d="M8 2.5c-2 0-1.8.9-1.8 0.9V5h3.6v.5H4.7S3 5.3 3 7.5s1.5 2.1 1.5 2.1H5.5V8.4S5.4 7 6.8 7h3.2s1.3 0 1.3-1.3V4.3S11.5 2.5 8 2.5z" fill="#FFD43B"/>
+        <path d="M8 13.5c2 0 1.8-.9 1.8-.9V11H6.2v-.5h5.1S13 10.7 13 8.5s-1.5-2.1-1.5-2.1H10.5v1.2s.1 1.4-1.3 1.4H6s-1.3 0-1.3 1.3v1.4S4.5 13.5 8 13.5z" fill="#fff"/>
+        <circle cx="6.5" cy="4" r=".8" fill="#fff"/>
+        <circle cx="9.5" cy="12" r=".8" fill="#FFD43B"/>
+      </svg>
+    ),
+    html: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#E44D26"/>
+        <path d="M3 2l1 10 4 1.5 4-1.5 1-10H3z" fill="#F16529"/>
+        <path d="M8 12.5V4H5.5l.7 7.2L8 12.5z" fill="#fff" opacity=".9"/>
+        <path d="M8 4h2.5l-.7 7.2L8 12.5V4z" fill="#fff"/>
+      </svg>
+    ),
+    css: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#1572B6"/>
+        <path d="M3 2l1 10 4 1.5 4-1.5 1-10H3z" fill="#33A9DC"/>
+        <path d="M8 12.5V4H5.5l.7 7.2L8 12.5z" fill="#fff" opacity=".9"/>
+        <path d="M8 4h2.5l-.7 7.2L8 12.5V4z" fill="#fff"/>
+      </svg>
+    ),
+    json: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#1e1e1e"/>
+        <text x="1.5" y="12" fontSize="9" fontWeight="bold" fontFamily="monospace" fill="#FFBE00">{'{}'}</text>
+      </svg>
+    ),
+    go: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#00ADD8"/>
+        <text x="1.5" y="13" fontSize="9" fontWeight="bold" fontFamily="monospace" fill="#fff">GO</text>
+      </svg>
+    ),
+    rs: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#CE422B"/>
+        <text x="1.5" y="13" fontSize="8" fontWeight="bold" fontFamily="monospace" fill="#fff">RS</text>
+      </svg>
+    ),
+    java: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#E76F00"/>
+        <text x="1" y="13" fontSize="7.5" fontWeight="bold" fontFamily="monospace" fill="#fff">JAVA</text>
+      </svg>
+    ),
+    cpp: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#00599C"/>
+        <text x="1.5" y="13" fontSize="8" fontWeight="bold" fontFamily="monospace" fill="#fff">C++</text>
+      </svg>
+    ),
+    c: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#00599C"/>
+        <text x="4" y="13" fontSize="9" fontWeight="bold" fontFamily="monospace" fill="#fff">C</text>
+      </svg>
+    ),
+    md: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#519aba"/>
+        <text x="1.5" y="13" fontSize="8" fontWeight="bold" fontFamily="monospace" fill="#fff">MD</text>
+      </svg>
+    ),
+    sh: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#4EAA25"/>
+        <text x="1.5" y="13" fontSize="8.5" fontWeight="bold" fontFamily="monospace" fill="#fff">SH</text>
+      </svg>
+    ),
+    sql: (
+      <svg viewBox="0 0 16 16" width="16" height="16">
+        <rect width="16" height="16" rx="2" fill="#ffca28"/>
+        <text x="1" y="13" fontSize="8" fontWeight="bold" fontFamily="monospace" fill="#333">SQL</text>
+      </svg>
+    ),
+  };
+
+  return icons[ext] ?? (
+    <svg viewBox="0 0 16 16" width="16" height="16">
+      <rect width="16" height="16" rx="2" fill="#6e7681"/>
+      <path d="M4 5h8M4 8h8M4 11h5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
 }
 
 function getLanguage(name: string): string {
@@ -110,7 +214,7 @@ export default function FileExplorer({
                   onClick={() => onSwitchFile(file.id)}
                   onContextMenu={e => handleContext(e, file.id)}
                 >
-                  <span className="fe-file-icon">{getIcon(file.name)}</span>
+                  <span className="fe-file-icon"><FileIcon name={file.name} /></span>
                   <span className="fe-file-name">{file.name}</span>
                   {file.unsaved && <span className="fe-unsaved-dot" title="Unsaved changes" />}
                   {watchers.length > 0 && (
