@@ -1,6 +1,6 @@
 import React from 'react';
 import UserPresence from '../UserPresence/UserPresence';
-import { User } from '../../types';
+import type { User } from '../../types';
 import './Toolbar.css';
 
 const LANGUAGES = [

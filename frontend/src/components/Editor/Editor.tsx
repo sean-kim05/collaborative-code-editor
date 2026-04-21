@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import MonacoEditor, { OnMount } from '@monaco-editor/react';
+import MonacoEditor from '@monaco-editor/react';
+import type { OnMount } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
-import { RemoteCursor } from '../../types';
+import type { RemoteCursor } from '../../types';
 
 interface Props {
   value: string;

@@ -43,7 +43,7 @@ def get_room_users(room_id: str) -> list:
     except Exception:
         return []
 
-def get_user_room(session_id: str) -> str | None:
+def get_user_room(session_id: str):
     r = get_redis()
     val = r.get(f'session:{session_id}:room')
     return val.decode('utf-8') if val else None

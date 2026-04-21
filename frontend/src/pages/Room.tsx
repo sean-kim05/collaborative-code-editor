@@ -5,7 +5,7 @@ import Editor from '../components/Editor/Editor';
 import Toolbar from '../components/Toolbar/Toolbar';
 import Chat from '../components/Chat/Chat';
 import FileExplorer from '../components/FileExplorer/FileExplorer';
-import { User, RemoteCursor, ChatMessage } from '../types';
+import type { User, RemoteCursor, ChatMessage } from '../types';
 import { getUserColor } from '../utils/userColors';
 import './Room.css';
 
