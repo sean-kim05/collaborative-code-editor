@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Zap, Users, Code2, Globe, Lock, Plus, ArrowRight } from 'lucide-react';
 import './Home.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
@@ -58,13 +59,13 @@ export default function Home() {
                     className={`vis-btn ${visibility === 'public' ? 'active' : ''}`}
                     onClick={() => setVisibility('public')}
                   >
-                    🌐 Public
+                    <Globe size={14} /> Public
                   </button>
                   <button
                     className={`vis-btn ${visibility === 'private' ? 'active' : ''}`}
                     onClick={() => setVisibility('private')}
                   >
-                    🔒 Private
+                    <Lock size={14} /> Private
                   </button>
                 </div>
                 <p className="modal-hint">
@@ -96,7 +97,7 @@ export default function Home() {
                 onClick={createRoom}
                 disabled={creating || (visibility === 'private' && !password.trim())}
               >
-                {creating ? 'Creating…' : 'Create Room →'}
+                {creating ? 'Creating…' : <><span>Create Room</span><ArrowRight size={14} /></>}
               </button>
             </div>
           </div>
@@ -105,7 +106,7 @@ export default function Home() {
 
       <nav className="home-nav">
         <div className="home-nav-logo">
-          <span className="nav-logo-icon">⌨</span>
+          <span className="nav-logo-icon"><Code2 size={16} /></span>
           <span className="nav-logo-text">CollabCode</span>
         </div>
         <a className="nav-link" href="https://github.com/sean-kim05/collaborative-code-editor" target="_blank" rel="noreferrer">GitHub</a>
@@ -123,7 +124,7 @@ export default function Home() {
           {!showJoin ? (
             <>
               <button className="btn-primary" onClick={() => setShowCreate(true)}>
-                <span className="btn-icon">+</span> Create Room
+                <Plus size={15} /> Create Room
               </button>
               <button className="btn-outline" onClick={() => setShowJoin(true)}>
                 Join Room
@@ -140,7 +141,7 @@ export default function Home() {
                 autoFocus
               />
               <button className="btn-primary" onClick={joinRoom} disabled={!joinId.trim()}>
-                Join →
+                Join <ArrowRight size={14} />
               </button>
               <button className="btn-ghost" onClick={() => setShowJoin(false)}>Cancel</button>
             </div>
@@ -149,17 +150,17 @@ export default function Home() {
 
         <div className="home-features">
           <div className="feature-card">
-            <div className="feature-icon" style={{ color: 'var(--accent)' }}>⚡</div>
+            <div className="feature-icon" style={{ color: 'var(--accent)' }}><Zap size={20} /></div>
             <div className="feature-label">Real-time sync</div>
             <div className="feature-desc">Every keystroke synced instantly across all collaborators</div>
           </div>
           <div className="feature-card">
-            <div className="feature-icon" style={{ color: 'var(--accent-secondary)' }}>👥</div>
+            <div className="feature-icon" style={{ color: 'var(--accent-secondary)' }}><Users size={20} /></div>
             <div className="feature-label">Live cursors</div>
             <div className="feature-desc">See exactly where your teammates are in the code</div>
           </div>
           <div className="feature-card">
-            <div className="feature-icon" style={{ color: 'var(--success)' }}>{ }</div>
+            <div className="feature-icon" style={{ color: 'var(--success)' }}><Code2 size={20} /></div>
             <div className="feature-label">Any language</div>
             <div className="feature-desc">JavaScript, Python, TypeScript, Go, Rust and more</div>
           </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { X, MessageSquare, Send } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 import './Chat.css';
 
@@ -43,13 +44,13 @@ export default function Chat({ messages, onSend, onClose, currentUsername, userC
           <div className="chat-title">Room Chat</div>
           <div className="chat-count">{userCount} {userCount === 1 ? 'person' : 'people'} in this room</div>
         </div>
-        <button className="chat-close" onClick={onClose}>✕</button>
+        <button className="chat-close" onClick={onClose}><X size={14} /></button>
       </div>
 
       <div className="chat-messages">
         {messages.length === 0 ? (
           <div className="chat-empty">
-            <div className="chat-empty-icon">💬</div>
+            <div className="chat-empty-icon"><MessageSquare size={28} strokeWidth={1.5} /></div>
             <div className="chat-empty-text">No messages yet.</div>
             <div className="chat-empty-sub">Say hello!</div>
           </div>
@@ -88,7 +89,7 @@ export default function Chat({ messages, onSend, onClose, currentUsername, userC
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKey}
         />
-        <button className="chat-send" onClick={handleSend} disabled={!input.trim()}>↑</button>
+        <button className="chat-send" onClick={handleSend} disabled={!input.trim()}><Send size={13} /></button>
       </div>
     </div>
   );
