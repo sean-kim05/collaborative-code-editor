@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import UserPresence from '../UserPresence/UserPresence';
 import type { User } from '../../types';
 import './Toolbar.css';
@@ -30,12 +30,17 @@ interface Props {
   chatOpen: boolean;
   unreadCount: number;
   running: boolean;
+  onAIToggle: () => void;
+  aiOpen: boolean;
+  onHistoryToggle: () => void;
+  historyOpen: boolean;
 }
 
 export default function Toolbar({
   roomId, language, onLanguageChange, fontSize, onFontSizeChange,
   users, currentSessionId, onShare, onRun, onLeave,
-  onChatToggle, chatOpen, unreadCount, running,
+  onChatToggle, unreadCount, running,
+  onAIToggle, aiOpen, onHistoryToggle, historyOpen,
 }: Props) {
   const [langOpen, setLangOpen] = useState(false);
   const [roomCopied, setRoomCopied] = useState(false);
@@ -56,7 +61,7 @@ export default function Toolbar({
           <span className="tb-logo-text">CollabCode</span>
         </div>
         <div className="tb-sep" />
-        <button className="room-pill" onClick={copyRoomId}>
+        <button className="room-pill" onClick={copyRoomId} title="Copy room ID">
           <span className="room-pill-id">{roomId.slice(0, 8)}</span>
           <span className="room-pill-copy">{roomCopied ? '✓' : '⧉'}</span>
         </button>
@@ -93,10 +98,25 @@ export default function Toolbar({
 
       <div className="toolbar-right">
         <UserPresence users={users} currentSessionId={currentSessionId} />
-
         <div className="tb-sep" />
 
-        <button className="tb-btn" onClick={onChatToggle}>
+        <button
+          className={`tb-btn ${aiOpen ? 'tb-btn-active' : ''}`}
+          onClick={onAIToggle}
+          title="AI Assistant (Ctrl+I)"
+        >
+          ✦
+        </button>
+
+        <button
+          className={`tb-btn ${historyOpen ? 'tb-btn-active' : ''}`}
+          onClick={onHistoryToggle}
+          title="Version History"
+        >
+          ⏱
+        </button>
+
+        <button className="tb-btn" onClick={onChatToggle} title="Chat (Ctrl+/)">
           💬
           {unreadCount > 0 && <span className="tb-badge">{unreadCount}</span>}
         </button>
@@ -105,7 +125,7 @@ export default function Toolbar({
           <span>↗</span> Share
         </button>
 
-        <button className={`tb-run-btn ${running ? 'running' : ''}`} onClick={onRun} disabled={running}>
+        <button className={`tb-run-btn ${running ? 'running' : ''}`} onClick={onRun} disabled={running} title="Run (Ctrl+Enter)">
           {running ? <span className="run-spinner" /> : '▶'}
           {running ? 'Running…' : 'Run'}
         </button>

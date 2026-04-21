@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Home.css';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
 
 function generateRoomId(): string {
   return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
@@ -10,19 +12,96 @@ export default function Home() {
   const navigate = useNavigate();
   const [joinId, setJoinId] = useState('');
   const [showJoin, setShowJoin] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [visibility, setVisibility] = useState<'public' | 'private'>('public');
+  const [password, setPassword] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  function createRoom() {
-    navigate(`/room/${generateRoomId()}`);
+  async function createRoom() {
+    setCreating(true);
+    const roomId = generateRoomId();
+    try {
+      await fetch(`${SOCKET_URL}/api/room/${roomId}/meta`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibility, password: password || null }),
+      });
+    } catch { /* proceed even if meta pre-set fails — room will be created on join */ }
+    navigate(`/room/${roomId}`);
   }
 
   function joinRoom() {
-    const id = joinId.trim();
+    const raw = joinId.trim();
+    if (!raw) return;
+    // Accept full URL or bare ID
+    const id = raw.startsWith('http') ? raw.split('/room/')[1]?.split('?')[0] : raw;
     if (id) navigate(`/room/${id}`);
   }
 
   return (
     <div className="home">
       <div className="home-bg" />
+
+      {showCreate && (
+        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Create Room</span>
+              <button className="modal-close" onClick={() => setShowCreate(false)}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              <div className="modal-field">
+                <label className="modal-label">Visibility</label>
+                <div className="vis-toggle">
+                  <button
+                    className={`vis-btn ${visibility === 'public' ? 'active' : ''}`}
+                    onClick={() => setVisibility('public')}
+                  >
+                    🌐 Public
+                  </button>
+                  <button
+                    className={`vis-btn ${visibility === 'private' ? 'active' : ''}`}
+                    onClick={() => setVisibility('private')}
+                  >
+                    🔒 Private
+                  </button>
+                </div>
+                <p className="modal-hint">
+                  {visibility === 'public'
+                    ? 'Anyone with the link can join.'
+                    : 'Only people with the password can join.'}
+                </p>
+              </div>
+
+              {visibility === 'private' && (
+                <div className="modal-field">
+                  <label className="modal-label">Password</label>
+                  <input
+                    className="modal-input"
+                    type="text"
+                    placeholder="Set a room password…"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={createRoom}
+                disabled={creating || (visibility === 'private' && !password.trim())}
+              >
+                {creating ? 'Creating…' : 'Create Room →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="home-nav">
         <div className="home-nav-logo">
@@ -43,7 +122,7 @@ export default function Home() {
         <div className="home-actions">
           {!showJoin ? (
             <>
-              <button className="btn-primary" onClick={createRoom}>
+              <button className="btn-primary" onClick={() => setShowCreate(true)}>
                 <span className="btn-icon">+</span> Create Room
               </button>
               <button className="btn-outline" onClick={() => setShowJoin(true)}>

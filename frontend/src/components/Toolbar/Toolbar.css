@@ -179,6 +179,7 @@
   transition: background 0.15s, color 0.15s;
 }
 .tb-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.tb-btn-active { background: color-mix(in srgb, var(--accent) 15%, transparent) !important; color: var(--accent) !important; }
 
 .tb-badge {
   position: absolute;

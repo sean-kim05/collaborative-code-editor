@@ -1,26 +1,64 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import type { OnMount } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
-import type { RemoteCursor } from '../../types';
+import type { RemoteCursor, RemoteSelection } from '../../types';
+
+export interface EditorHandle {
+  applyText: (text: string) => void;
+  getSelection: () => string;
+  insertAtCursor: (text: string) => void;
+}
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   onCursorChange: (position: { lineNumber: number; column: number }) => void;
+  onSelectionChange?: (selection: string) => void;
   remoteCursors: RemoteCursor[];
+  remoteSelections?: RemoteSelection[];
   language: string;
   fontSize: number;
   theme: 'dark' | 'light';
 }
 
-export default function Editor({
-  value, onChange, onCursorChange, remoteCursors, language, fontSize, theme
-}: Props) {
+const Editor = forwardRef<EditorHandle, Props>(function Editor(
+  { value, onChange, onCursorChange, onSelectionChange, remoteCursors, remoteSelections = [], language, fontSize, theme },
+  ref
+) {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const suppressRef = useRef(false);
   const monacoRef = useRef<typeof Monaco | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    applyText(text: string) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const model = editor.getModel();
+      if (!model) return;
+      const selection = editor.getSelection();
+      if (selection && !selection.isEmpty()) {
+        editor.executeEdits('ai', [{ range: selection, text, forceMoveMarkers: true }]);
+      } else {
+        model.setValue(text);
+      }
+    },
+    getSelection() {
+      const editor = editorRef.current;
+      if (!editor) return '';
+      const selection = editor.getSelection();
+      if (!selection || selection.isEmpty()) return '';
+      return editor.getModel()?.getValueInRange(selection) || '';
+    },
+    insertAtCursor(text: string) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const pos = editor.getPosition();
+      if (!pos) return;
+      editor.executeEdits('ai', [{ range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column }, text, forceMoveMarkers: true }]);
+    },
+  }));
 
   const handleMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
@@ -28,6 +66,16 @@ export default function Editor({
 
     editor.onDidChangeCursorPosition((e) => {
       onCursorChange({ lineNumber: e.position.lineNumber, column: e.position.column });
+    });
+
+    editor.onDidChangeCursorSelection((e) => {
+      const sel = e.selection;
+      if (!sel.isEmpty() && onSelectionChange) {
+        const text = editor.getModel()?.getValueInRange(sel) || '';
+        onSelectionChange(text);
+      } else if (onSelectionChange) {
+        onSelectionChange('');
+      }
     });
 
     monaco.editor.defineTheme('collab-dark', {
@@ -53,7 +101,7 @@ export default function Editor({
     });
 
     monaco.editor.setTheme(theme === 'dark' ? 'collab-dark' : 'collab-light');
-  }, [theme, onCursorChange]);
+  }, [theme, onCursorChange, onSelectionChange]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -64,12 +112,9 @@ export default function Editor({
 
   useEffect(() => {
     const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
-
+    if (!editor) return;
     const model = editor.getModel();
     if (!model) return;
-
     const current = model.getValue();
     if (current !== value) {
       suppressRef.current = true;
@@ -85,31 +130,29 @@ export default function Editor({
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
 
-    const newDecorations = remoteCursors.map((cursor) => ({
-      range: new monaco.Range(
-        cursor.position.lineNumber,
-        cursor.position.column,
-        cursor.position.lineNumber,
-        cursor.position.column
-      ),
+    const cursorDecorations = remoteCursors.map((cursor) => ({
+      range: new monaco.Range(cursor.position.lineNumber, cursor.position.column, cursor.position.lineNumber, cursor.position.column),
       options: {
-        className: `remote-cursor`,
-        beforeContentClassName: `remote-cursor-before`,
+        className: 'remote-cursor',
+        beforeContentClassName: 'remote-cursor-before',
         stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
         zIndex: 10,
-        before: {
-          content: '|',
-          inlineClassName: `remote-cursor-caret`,
-        },
-        after: {
-          content: cursor.username,
-          inlineClassName: `remote-cursor-label`,
-        },
+        before: { content: '|', inlineClassName: 'remote-cursor-caret' },
+        after: { content: cursor.username, inlineClassName: 'remote-cursor-label' },
       },
     }));
 
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
-  }, [remoteCursors]);
+    const selectionDecorations = remoteSelections.map((sel) => ({
+      range: new monaco.Range(sel.startLine, sel.startColumn, sel.endLine, sel.endColumn),
+      options: {
+        className: 'remote-selection',
+        inlineClassName: 'remote-selection-inline',
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+      },
+    }));
+
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [...cursorDecorations, ...selectionDecorations]);
+  }, [remoteCursors, remoteSelections]);
 
   return (
     <div className="editor-wrapper">
@@ -141,4 +184,6 @@ export default function Editor({
       />
     </div>
   );
-}
+});
+
+export default Editor;

@@ -2,18 +2,22 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import Editor from '../components/Editor/Editor';
+import type { EditorHandle } from '../components/Editor/Editor';
 import Toolbar from '../components/Toolbar/Toolbar';
 import Chat from '../components/Chat/Chat';
 import FileExplorer from '../components/FileExplorer/FileExplorer';
 import StatusBar from '../components/StatusBar/StatusBar';
 import LoadingScreen from '../components/LoadingScreen/LoadingScreen';
 import ShareModal from '../components/ShareModal/ShareModal';
+import AIAssistant from '../components/AIAssistant/AIAssistant';
+import VersionHistory from '../components/VersionHistory/VersionHistory';
 import { ToastContainer, useToasts } from '../components/Toast/Toast';
-import type { User, RemoteCursor, ChatMessage } from '../types';
+import type { User, RemoteCursor, RemoteSelection, ChatMessage, FileSystem, TypingUser } from '../types';
 import { getUserColor } from '../utils/userColors';
 import './Room.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
+const AUTO_SNAPSHOT_INTERVAL = 2 * 60 * 1000; // 2 minutes
 
 function getUsername(): string {
   const stored = localStorage.getItem('collab_username');
@@ -27,11 +31,20 @@ export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
 
-  const [code, setCode] = useState('');
+  // File system
+  const [fs, setFs] = useState<FileSystem>({ files: [], activeFileId: '' });
+  const fsRef = useRef<FileSystem>({ files: [], activeFileId: '' });
+
+  // Active file content shortcut
+  const activeFile = fs.files.find(f => f.id === fs.activeFileId) || fs.files[0];
+  const activeCode = activeFile?.content || '';
+  const activeLanguage = activeFile?.language || 'javascript';
+
   const [language, setLanguage] = useState('javascript');
   const [fontSize, setFontSize] = useState(14);
   const [users, setUsers] = useState<User[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
+  const [remoteSelections, setRemoteSelections] = useState<RemoteSelection[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -41,14 +54,42 @@ export default function Room() {
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState<{ stdout: string; stderr: string; elapsed_ms: number } | null>(null);
   const [outputOpen, setOutputOpen] = useState(false);
+  const [outputHeight, setOutputHeight] = useState(200);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [cursorPos, setCursorPos] = useState({ line: 1, column: 1 });
+  const [aiOpen, setAiOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [currentSelection, setCurrentSelection] = useState('');
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
 
   const { toasts, addToast, dismiss } = useToasts();
   const socketRef = useRef<Socket | null>(null);
   const usernameRef = useRef(getUsername());
   const colorRef = useRef(getUserColor(usernameRef.current));
   const sessionIdRef = useRef<string | null>(null);
+  const editorRef = useRef<EditorHandle | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSnapshotRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const outputDragRef = useRef<{ startY: number; startH: number } | null>(null);
+
+  // Keep fsRef in sync for socket callbacks
+  useEffect(() => { fsRef.current = fs; }, [fs]);
+
+  // Auto-snapshot every 2 minutes
+  useEffect(() => {
+    if (!roomId) return;
+    autoSnapshotRef.current = setInterval(async () => {
+      const cur = fsRef.current;
+      const file = cur.files.find(f => f.id === cur.activeFileId) || cur.files[0];
+      if (!file) return;
+      await fetch(`${SOCKET_URL}/api/snapshots/${roomId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: file.id, file_name: file.name, content: file.content }),
+      });
+    }, AUTO_SNAPSHOT_INTERVAL);
+    return () => { if (autoSnapshotRef.current) clearInterval(autoSnapshotRef.current); };
+  }, [roomId]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -66,35 +107,68 @@ export default function Room() {
       addToast('Connection lost, reconnecting…', 'warning');
     });
 
-    socket.on('room_state', (data: { content: string; users: User[] }) => {
-      setCode(data.content);
+    socket.on('join_error', (data: { message: string }) => {
+      addToast(data.message, 'error');
+      navigate('/');
+    });
+
+    socket.on('room_state', (data: { fs: FileSystem; users: User[] }) => {
+      setFs(data.fs);
       setUsers(data.users);
+      if (data.fs.files[0]) setLanguage(data.fs.files[0].language);
       setLoading(false);
     });
 
     socket.on('user_list', (data: { users: User[] }) => setUsers(data.users));
 
     socket.on('user_joined', (user: User) => {
-      addToast(`${user.username} joined the room`, 'info');
+      addToast(`${user.username} joined`, 'info');
     });
 
     socket.on('user_left', (data: { session_id: string }) => {
-      setRemoteCursors((prev) => prev.filter((c) => c.session_id !== data.session_id));
+      setRemoteCursors(prev => prev.filter(c => c.session_id !== data.session_id));
+      setRemoteSelections(prev => prev.filter(s => s.session_id !== data.session_id));
+      setTypingUsers(prev => prev.filter(u => u.session_id !== data.session_id));
     });
 
-    socket.on('code_change', (data: { content: string }) => setCode(data.content));
+    socket.on('code_change', (data: { file_id: string; content: string }) => {
+      setFs(prev => {
+        const files = prev.files.map(f => f.id === data.file_id ? { ...f, content: data.content } : f);
+        return { ...prev, files };
+      });
+    });
+
+    socket.on('fs_update', (data: { fs: FileSystem }) => {
+      setFs(data.fs);
+    });
 
     socket.on('cursor_move', (data: { session_id: string; username: string; color: string; cursor_position: { lineNumber: number; column: number } }) => {
-      setRemoteCursors((prev) => {
-        const filtered = prev.filter((c) => c.session_id !== data.session_id);
+      setRemoteCursors(prev => {
+        const filtered = prev.filter(c => c.session_id !== data.session_id);
         return [...filtered, { session_id: data.session_id, username: data.username, color: data.color, position: data.cursor_position }];
+      });
+    });
+
+    socket.on('selection_change', (data: { session_id: string; username: string; color: string; startLine: number; startColumn: number; endLine: number; endColumn: number }) => {
+      setRemoteSelections(prev => {
+        const filtered = prev.filter(s => s.session_id !== data.session_id);
+        if (data.startLine === data.endLine && data.startColumn === data.endColumn) return filtered;
+        return [...filtered, data];
+      });
+    });
+
+    socket.on('typing', (data: { session_id: string; username: string; color: string; isTyping: boolean }) => {
+      setTypingUsers(prev => {
+        const filtered = prev.filter(u => u.session_id !== data.session_id);
+        if (data.isTyping) return [...filtered, { session_id: data.session_id, username: data.username, color: data.color }];
+        return filtered;
       });
     });
 
     socket.on('new_message', (msg: ChatMessage) => {
       const withId = { ...msg, id: Math.random().toString(36).slice(2) };
-      setMessages((prev) => [...prev, withId]);
-      if (!chatOpen) setUnreadCount((n) => n + 1);
+      setMessages(prev => [...prev, withId]);
+      if (!chatOpen) setUnreadCount(n => n + 1);
     });
 
     return () => {
@@ -103,18 +177,35 @@ export default function Room() {
     };
   }, [roomId]);
 
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); setChatOpen((o) => !o); }
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); setChatOpen(o => !o); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleRun(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); setAiOpen(o => !o); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveManualSnapshot();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [code, language]);
+  }, [activeCode, activeFile]);
 
   function handleCodeChange(newCode: string) {
-    setCode(newCode);
-    socketRef.current?.emit('code_change', { room_id: roomId, content: newCode, username: usernameRef.current });
+    const fileId = fs.activeFileId;
+    setFs(prev => ({
+      ...prev,
+      files: prev.files.map(f => f.id === fileId ? { ...f, content: newCode, unsaved: true } : f),
+    }));
+    socketRef.current?.emit('code_change', { room_id: roomId, file_id: fileId, content: newCode });
+
+    // Typing indicator
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    socketRef.current?.emit('typing', { room_id: roomId, session_id: sessionIdRef.current, username: usernameRef.current, color: colorRef.current, isTyping: true });
+    typingTimerRef.current = setTimeout(() => {
+      socketRef.current?.emit('typing', { room_id: roomId, session_id: sessionIdRef.current, username: usernameRef.current, color: colorRef.current, isTyping: false });
+    }, 1500);
   }
 
   function handleCursorChange(position: { lineNumber: number; column: number }) {
@@ -122,17 +213,41 @@ export default function Room() {
     socketRef.current?.emit('cursor_move', { room_id: roomId, cursor_position: position, username: usernameRef.current, color: colorRef.current, session_id: sessionIdRef.current });
   }
 
+  function handleSelectionChange(sel: string) {
+    setCurrentSelection(sel);
+  }
+
+  function handleSwitchFile(fileId: string) {
+    setFs(prev => ({ ...prev, activeFileId: fileId }));
+    const file = fs.files.find(f => f.id === fileId);
+    if (file) setLanguage(file.language);
+    socketRef.current?.emit('switch_file', { room_id: roomId, file_id: fileId, session_id: sessionIdRef.current });
+  }
+
+  function handleCreateFile(name: string, lang: string) {
+    socketRef.current?.emit('create_file', { room_id: roomId, name, language: lang });
+  }
+
+  function handleDeleteFile(fileId: string) {
+    socketRef.current?.emit('delete_file', { room_id: roomId, file_id: fileId });
+  }
+
+  function handleRenameFile(fileId: string, name: string) {
+    socketRef.current?.emit('rename_file', { room_id: roomId, file_id: fileId, name });
+  }
+
   function handleSendMessage(message: string) {
     socketRef.current?.emit('send_message', { room_id: roomId, username: usernameRef.current, color: colorRef.current, message, timestamp: new Date().toISOString() });
   }
 
-  function handleShare() {
-    setShareOpen(true);
-  }
-
-  function handleLeave() {
-    socketRef.current?.emit('leave_room', { room_id: roomId });
-    navigate('/');
+  async function saveManualSnapshot() {
+    if (!activeFile) return;
+    await fetch(`${SOCKET_URL}/api/snapshots/${roomId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: activeFile.id, file_name: activeFile.name, content: activeCode, label: 'Manual save' }),
+    });
+    addToast('Checkpoint saved', 'success');
   }
 
   const handleRun = useCallback(async () => {
@@ -150,19 +265,59 @@ export default function Room() {
       const errors: string[] = [];
       const origLog = console.log;
       const origErr = console.error;
-      console.log = (...args) => logs.push(args.join(' '));
-      console.error = (...args) => errors.push(args.join(' '));
-      try { new Function(code)(); } catch (e: unknown) { errors.push(String(e)); }
+      console.log = (...args) => logs.push(args.map(String).join(' '));
+      console.error = (...args) => errors.push(args.map(String).join(' '));
+      try {
+        const fn = new Function(activeCode);
+        const result = fn();
+        if (result instanceof Promise) await Promise.race([result, new Promise((_, reject) => setTimeout(() => reject(new Error('Async timeout (5s)')), 5000))]);
+      } catch (e: unknown) { errors.push(String(e)); }
       console.log = origLog; console.error = origErr;
       setOutput({ stdout: logs.join('\n'), stderr: errors.join('\n'), elapsed_ms: Math.round(performance.now() - start) });
     } else {
       try {
-        const res = await fetch(`${SOCKET_URL}/api/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: 'python', code }) });
+        const res = await fetch(`${SOCKET_URL}/api/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: 'python', code: activeCode }) });
         setOutput(await res.json());
       } catch { setOutput({ stdout: '', stderr: 'Failed to reach server', elapsed_ms: 0 }); }
     }
     setRunning(false);
-  }, [code, language]);
+  }, [activeCode, language]);
+
+  function handleApplyAI(code: string) {
+    const fileId = fs.activeFileId;
+    if (editorRef.current) {
+      editorRef.current.applyText(code);
+    } else {
+      setFs(prev => ({
+        ...prev,
+        files: prev.files.map(f => f.id === fileId ? { ...f, content: code, unsaved: true } : f),
+      }));
+    }
+    addToast('AI suggestion applied', 'success');
+  }
+
+  function handleRestoreSnapshot(content: string) {
+    const fileId = fs.activeFileId;
+    setFs(prev => ({
+      ...prev,
+      files: prev.files.map(f => f.id === fileId ? { ...f, content, unsaved: true } : f),
+    }));
+    socketRef.current?.emit('code_change', { room_id: roomId, file_id: fileId, content });
+    addToast('Snapshot restored', 'success');
+  }
+
+  // Resizable output panel
+  function startOutputDrag(e: React.MouseEvent) {
+    outputDragRef.current = { startY: e.clientY, startH: outputHeight };
+    const onMove = (ev: MouseEvent) => {
+      if (!outputDragRef.current) return;
+      const delta = outputDragRef.current.startY - ev.clientY;
+      setOutputHeight(Math.max(80, Math.min(500, outputDragRef.current.startH + delta)));
+    };
+    const onUp = () => { outputDragRef.current = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
 
   if (loading) return <LoadingScreen />;
 
@@ -171,69 +326,110 @@ export default function Room() {
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
 
       {shareOpen && (
-        <ShareModal
-          roomId={roomId || ''}
-          onClose={() => setShareOpen(false)}
-          onCopied={() => addToast('Room link copied!', 'success')}
-        />
+        <ShareModal roomId={roomId || ''} onClose={() => setShareOpen(false)} onCopied={() => addToast('Link copied!', 'success')} />
       )}
 
       <Toolbar
         roomId={roomId || ''}
         language={language}
-        onLanguageChange={setLanguage}
+        onLanguageChange={(lang) => {
+          setLanguage(lang);
+          const fileId = fs.activeFileId;
+          socketRef.current?.emit('rename_file', { room_id: roomId, file_id: fileId, name: activeFile?.name || 'main' });
+        }}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
         users={users}
         currentSessionId={sessionIdRef.current || undefined}
-        onShare={handleShare}
+        onShare={() => setShareOpen(true)}
         onRun={handleRun}
-        onLeave={handleLeave}
-        onChatToggle={() => { setChatOpen((o) => !o); setUnreadCount(0); }}
+        onLeave={() => { socketRef.current?.emit('leave_room', { room_id: roomId }); navigate('/'); }}
+        onChatToggle={() => { setChatOpen(o => !o); setUnreadCount(0); }}
         chatOpen={chatOpen}
         unreadCount={unreadCount}
         running={running}
+        onAIToggle={() => setAiOpen(o => !o)}
+        aiOpen={aiOpen}
+        onHistoryToggle={() => setHistoryOpen(o => !o)}
+        historyOpen={historyOpen}
       />
 
       {!welcomeDismissed && (
         <div className="welcome-banner">
-          <span>👋 Welcome to CollabCode! Share the URL to invite others.</span>
+          <span>Welcome to CollabCode! Share the URL to invite collaborators. Press Ctrl+I for AI assistant, Ctrl+S to save checkpoint.</span>
           <button className="welcome-dismiss" onClick={() => setWelcomeDismissed(true)}>✕</button>
         </div>
       )}
 
       {!connected && (
-        <div className="offline-banner">
-          ⚠ You're offline. Changes will sync when reconnected.
+        <div className="offline-banner">⚠ You're offline. Changes will sync when reconnected.</div>
+      )}
+
+      {typingUsers.length > 0 && (
+        <div className="typing-banner">
+          {typingUsers.map((u, i) => (
+            <span key={u.session_id} style={{ color: u.color }}>
+              {u.username}{i < typingUsers.length - 1 ? ', ' : ''}
+            </span>
+          ))}
+          {' '}
+          {typingUsers.length === 1 ? 'is typing…' : 'are typing…'}
         </div>
       )}
 
       <div className="room-body">
-        <FileExplorer language={language} roomId={roomId || ''} />
+        <FileExplorer
+          files={fs.files}
+          activeFileId={fs.activeFileId}
+          users={users}
+          currentSessionId={sessionIdRef.current || undefined}
+          onSwitchFile={handleSwitchFile}
+          onCreateFile={handleCreateFile}
+          onDeleteFile={handleDeleteFile}
+          onRenameFile={handleRenameFile}
+        />
 
         <div className="editor-area">
+          <div className="editor-tabs">
+            {fs.files.map(file => (
+              <div
+                key={file.id}
+                className={`editor-tab ${file.id === fs.activeFileId ? 'active' : ''}`}
+                onClick={() => handleSwitchFile(file.id)}
+              >
+                <span className="editor-tab-name">{file.name}</span>
+                {file.unsaved && <span className="editor-tab-dot" />}
+              </div>
+            ))}
+          </div>
+
           <div className="editor-main">
             <Editor
-              value={code}
+              ref={editorRef}
+              value={activeCode}
               onChange={handleCodeChange}
               onCursorChange={handleCursorChange}
+              onSelectionChange={handleSelectionChange}
               remoteCursors={remoteCursors}
-              language={language}
+              remoteSelections={remoteSelections}
+              language={activeLanguage}
               fontSize={fontSize}
               theme="dark"
             />
           </div>
 
           {outputOpen && (
-            <div className="output-panel">
+            <div className="output-panel" style={{ height: outputHeight }}>
+              <div className="output-resize-handle" onMouseDown={startOutputDrag} />
               <div className="output-header">
                 <span>Output</span>
                 {output && <span className="output-time">{output.elapsed_ms}ms</span>}
+                {running && <span className="output-running">● Running</span>}
                 <button className="output-btn" onClick={() => setOutput(null)}>Clear</button>
                 <button className="output-btn" onClick={() => setOutputOpen(false)}>✕</button>
               </div>
               <div className="output-body">
-                {running && <div className="output-loading">Running…</div>}
+                {running && !output && <div className="output-loading">Running…</div>}
                 {output?.stdout && <pre className="output-stdout">{output.stdout}</pre>}
                 {output?.stderr && <pre className="output-stderr">{output.stderr}</pre>}
                 {output && !output.stdout && !output.stderr && <div className="output-empty">No output</div>}
@@ -241,6 +437,27 @@ export default function Room() {
             </div>
           )}
         </div>
+
+        {aiOpen && (
+          <AIAssistant
+            code={activeCode}
+            selection={currentSelection}
+            language={activeLanguage}
+            onApply={handleApplyAI}
+            onClose={() => setAiOpen(false)}
+          />
+        )}
+
+        {historyOpen && (
+          <VersionHistory
+            roomId={roomId || ''}
+            currentCode={activeCode}
+            currentFileName={activeFile?.name || 'main.js'}
+            currentFileId={activeFile?.id || ''}
+            onRestore={handleRestoreSnapshot}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
 
         {chatOpen && (
           <Chat
@@ -253,7 +470,7 @@ export default function Room() {
         )}
       </div>
 
-      <StatusBar language={language} connected={connected} line={cursorPos.line} column={cursorPos.column} />
+      <StatusBar language={activeLanguage} connected={connected} line={cursorPos.line} column={cursorPos.column} />
     </div>
   );
 }

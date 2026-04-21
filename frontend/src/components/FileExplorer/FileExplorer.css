@@ -1,69 +1,136 @@
 .fe {
-  width: 220px;
+  width: 200px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .fe-header {
-  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.fe-section-label {
-  font-size: 11px;
-  font-weight: 600;
+.fe-new-btn {
+  background: transparent;
+  border: none;
   color: var(--text-muted);
-  padding: 10px 14px 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: color 0.15s;
+}
+.fe-new-btn:hover { color: var(--text-primary); }
+
+.fe-files {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
 }
 
 .fe-file {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 6px;
+  padding: 5px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   transition: background 0.1s, color 0.1s;
+  position: relative;
 }
 .fe-file:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-.fe-file.active { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-primary); }
+.fe-file.active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-primary);
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
 
-.fe-file-dot {
-  width: 6px;
-  height: 6px;
+.fe-file-icon { font-size: 12px; flex-shrink: 0; }
+
+.fe-file-name {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fe-unsaved-dot {
+  width: 6px; height: 6px;
   border-radius: 50%;
   background: var(--accent);
   flex-shrink: 0;
 }
 
-.fe-file-name {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-}
-
-.fe-empty {
-  flex: 1;
+.fe-watchers {
   display: flex;
-  flex-direction: column;
+  gap: 2px;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 20px;
-  text-align: center;
 }
 
-.fe-empty-icon { font-size: 20px; opacity: 0.3; }
-.fe-empty-text { font-size: 12px; color: var(--text-muted); }
-.fe-empty-sub { font-size: 11px; color: var(--text-muted); opacity: 0.7; line-height: 1.4; }
+.fe-watcher-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.fe-file-rename {
+  padding: 3px 8px;
+}
+
+.fe-rename-input {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 4px 6px;
+  outline: none;
+}
+
+.fe-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  overflow: hidden;
+  min-width: 140px;
+}
+
+.fe-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.fe-context-menu button:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.fe-context-menu button.danger { color: var(--error); }
+.fe-context-menu button.danger:hover { background: color-mix(in srgb, var(--error) 10%, transparent); }
+.fe-context-menu button:disabled { opacity: 0.35; cursor: not-allowed; }

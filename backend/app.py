@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_socketio import SocketIO, join_room, leave_room, emit
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -6,11 +6,16 @@ import os
 import subprocess
 import tempfile
 import time
+import json
+import sqlite3
+import anthropic
 
 from rooms import (
     store_room_content, get_room_content,
     add_user_to_room, remove_user_from_room, get_room_users,
-    get_user_room, set_user_room, clear_user_room
+    get_user_room, set_user_room, clear_user_room,
+    get_file_system, store_file_system, make_file,
+    get_room_meta, set_room_meta,
 )
 
 load_dotenv()
@@ -20,14 +25,27 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 
 CORS(app, origins='*')
 
-socketio = SocketIO(
-    app,
-    cors_allowed_origins='*',
-    async_mode='eventlet'
-)
+socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
 
+DB_PATH = os.path.join(os.path.dirname(__file__), 'snapshots.db')
 
-# --- Socket.IO events ---
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id TEXT NOT NULL,
+        file_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        content TEXT NOT NULL,
+        label TEXT,
+        created_at TEXT NOT NULL
+    )''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ── Socket.IO events ───────────────────────────────────────────────
 
 @socketio.on('connect')
 def on_connect():
@@ -51,20 +69,40 @@ def on_join_room(data):
     room_id = data.get('room_id')
     username = data.get('username', 'Anonymous')
     color = data.get('color', '#ffffff')
+    password = data.get('password', '')
     sid = request.sid
+
+    meta = get_room_meta(room_id)
+    if meta.get('password') and meta['password'] != password:
+        emit('join_error', {'message': 'Incorrect password'})
+        return
 
     join_room(room_id)
     set_user_room(sid, room_id)
+
+    if meta.get('owner') is None:
+        meta['owner'] = sid
+        set_room_meta(room_id, meta)
 
     user_data = {'session_id': sid, 'username': username, 'color': color}
     add_user_to_room(room_id, user_data)
 
     users = get_room_users(room_id)
-    content = get_room_content(room_id)
+    fs = get_file_system(room_id)
 
-    emit('room_state', {'content': content, 'users': users})
+    emit('room_state', {'fs': fs, 'users': users, 'meta': meta})
     emit('user_joined', user_data, to=room_id, include_self=False)
     emit('user_list', {'users': users}, to=room_id)
+
+@socketio.on('create_room')
+def on_create_room(data):
+    room_id = data.get('room_id')
+    visibility = data.get('visibility', 'public')
+    password = data.get('password', None)
+    sid = request.sid
+    meta = {'visibility': visibility, 'password': password, 'owner': sid}
+    set_room_meta(room_id, meta)
+    emit('room_created', {'room_id': room_id, 'meta': meta})
 
 @socketio.on('leave_room')
 def on_leave_room(data):
@@ -81,7 +119,16 @@ def on_leave_room(data):
 def on_code_change(data):
     room_id = data.get('room_id')
     content = data.get('content', '')
-    store_room_content(room_id, content)
+    file_id = data.get('file_id')
+    if file_id:
+        fs = get_file_system(room_id)
+        for f in fs['files']:
+            if f['id'] == file_id:
+                f['content'] = content
+                break
+        store_file_system(room_id, fs)
+    else:
+        store_room_content(room_id, content)
     emit('code_change', data, to=room_id, include_self=False)
 
 @socketio.on('cursor_move')
@@ -89,30 +136,78 @@ def on_cursor_move(data):
     room_id = data.get('room_id')
     emit('cursor_move', data, to=room_id, include_self=False)
 
-@socketio.on('get_room_state')
-def on_get_room_state(data):
+@socketio.on('selection_change')
+def on_selection_change(data):
     room_id = data.get('room_id')
-    content = get_room_content(room_id)
-    users = get_room_users(room_id)
-    emit('room_state', {'content': content, 'users': users})
+    emit('selection_change', data, to=room_id, include_self=False)
+
+@socketio.on('typing')
+def on_typing(data):
+    room_id = data.get('room_id')
+    emit('typing', data, to=room_id, include_self=False)
 
 @socketio.on('send_message')
 def on_send_message(data):
     room_id = data.get('room_id')
     emit('new_message', data, to=room_id)
 
+# ── File system events ─────────────────────────────────────────────
 
-# --- REST endpoints ---
+@socketio.on('create_file')
+def on_create_file(data):
+    room_id = data.get('room_id')
+    name = data.get('name', 'untitled.js')
+    language = data.get('language', 'javascript')
+    fs = get_file_system(room_id)
+    new_file = make_file(name, '', language)
+    fs['files'].append(new_file)
+    fs['activeFileId'] = new_file['id']
+    store_file_system(room_id, fs)
+    emit('fs_update', {'fs': fs}, to=room_id)
+
+@socketio.on('delete_file')
+def on_delete_file(data):
+    room_id = data.get('room_id')
+    file_id = data.get('file_id')
+    fs = get_file_system(room_id)
+    if len(fs['files']) <= 1:
+        return
+    fs['files'] = [f for f in fs['files'] if f['id'] != file_id]
+    if fs['activeFileId'] == file_id:
+        fs['activeFileId'] = fs['files'][0]['id']
+    store_file_system(room_id, fs)
+    emit('fs_update', {'fs': fs}, to=room_id)
+
+@socketio.on('rename_file')
+def on_rename_file(data):
+    room_id = data.get('room_id')
+    file_id = data.get('file_id')
+    new_name = data.get('name', '')
+    fs = get_file_system(room_id)
+    for f in fs['files']:
+        if f['id'] == file_id:
+            f['name'] = new_name
+            break
+    store_file_system(room_id, fs)
+    emit('fs_update', {'fs': fs}, to=room_id)
+
+@socketio.on('switch_file')
+def on_switch_file(data):
+    room_id = data.get('room_id')
+    file_id = data.get('file_id')
+    session_id = data.get('session_id')
+    emit('file_switched', {'file_id': file_id, 'session_id': session_id}, to=room_id, include_self=False)
+
+# ── REST endpoints ─────────────────────────────────────────────────
 
 @app.route('/api/run', methods=['POST'])
 def run_code():
     data = request.get_json() or {}
     language = data.get('language', 'python')
     code = data.get('code', '')
-
     if language == 'python':
         return run_python(code)
-    return jsonify({'error': 'Unsupported language for server execution'}), 400
+    return jsonify({'error': 'Unsupported language'}), 400
 
 def run_python(code: str):
     start = time.time()
@@ -121,15 +216,11 @@ def run_python(code: str):
             f.write(code)
             fname = f.name
         result = subprocess.run(
-            ['python3', '-c', f'import sys; sys.stdin = open("/dev/null"); exec(open("{fname}").read())'],
+            ['python3', fname],
             capture_output=True, text=True, timeout=5
         )
         elapsed = round((time.time() - start) * 1000)
-        return jsonify({
-            'stdout': result.stdout,
-            'stderr': result.stderr,
-            'elapsed_ms': elapsed
-        })
+        return jsonify({'stdout': result.stdout, 'stderr': result.stderr, 'elapsed_ms': elapsed})
     except subprocess.TimeoutExpired:
         return jsonify({'stdout': '', 'stderr': 'Execution timed out (5s limit)', 'elapsed_ms': 5000})
     except Exception as e:
@@ -140,11 +231,110 @@ def run_python(code: str):
         except Exception:
             pass
 
+@app.route('/api/ai', methods=['POST'])
+def ai_assist():
+    data = request.get_json() or {}
+    mode = data.get('mode', 'explain')
+    code = data.get('code', '')
+    selection = data.get('selection', '')
+    language = data.get('language', 'javascript')
+    error_msg = data.get('error', '')
+    prompt = data.get('prompt', '')
+    history = data.get('history', [])
+
+    target = selection if selection.strip() else code
+    lang_label = language.capitalize()
+
+    if mode == 'explain':
+        user_msg = f"Explain this {lang_label} code clearly and concisely. Focus on what it does, how it works, and any important patterns:\n\n```{language}\n{target}\n```"
+    elif mode == 'fix':
+        error_part = f"\n\nError message:\n```\n{error_msg}\n```" if error_msg else ""
+        user_msg = f"Fix the bug in this {lang_label} code. Show the corrected code and briefly explain what was wrong:{error_part}\n\n```{language}\n{target}\n```"
+    elif mode == 'improve':
+        user_msg = f"Improve this {lang_label} code. Make it cleaner, more efficient, or more readable. Show the improved code with brief explanations:\n\n```{language}\n{target}\n```"
+    elif mode == 'generate':
+        user_msg = f"Generate {lang_label} code for the following: {prompt}\n\nReturn only the code in a code block, then a brief explanation."
+    else:
+        user_msg = prompt or f"Help with this {lang_label} code:\n\n```{language}\n{target}\n```"
+
+    messages = history + [{'role': 'user', 'content': user_msg}]
+
+    def generate():
+        try:
+            client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+            with client.messages.stream(
+                model='claude-sonnet-4-6',
+                max_tokens=2048,
+                system=f'You are an expert {lang_label} developer and coding assistant embedded in a collaborative code editor. Be concise and practical. When showing code, use markdown code blocks.',
+                messages=messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    yield f"data: {json.dumps({'type': 'text', 'text': text})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+# ── Version history ────────────────────────────────────────────────
+
+@app.route('/api/snapshots/<room_id>', methods=['GET'])
+def get_snapshots(room_id):
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        'SELECT id, file_id, file_name, label, created_at FROM snapshots WHERE room_id=? ORDER BY created_at DESC LIMIT 50',
+        (room_id,)
+    ).fetchall()
+    conn.close()
+    return jsonify([{'id': r[0], 'file_id': r[1], 'file_name': r[2], 'label': r[3], 'created_at': r[4]} for r in rows])
+
+@app.route('/api/snapshots/<room_id>', methods=['POST'])
+def create_snapshot(room_id):
+    data = request.get_json() or {}
+    file_id = data.get('file_id', '')
+    file_name = data.get('file_name', 'main.js')
+    content = data.get('content', '')
+    label = data.get('label', None)
+    created_at = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        'INSERT INTO snapshots (room_id, file_id, file_name, content, label, created_at) VALUES (?,?,?,?,?,?)',
+        (room_id, file_id, file_name, content, label, created_at)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/snapshots/detail/<int:snapshot_id>', methods=['GET'])
+def get_snapshot(snapshot_id):
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute('SELECT id, file_id, file_name, content, label, created_at FROM snapshots WHERE id=?', (snapshot_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({'id': row[0], 'file_id': row[1], 'file_name': row[2], 'content': row[3], 'label': row[4], 'created_at': row[5]})
+
 @app.route('/api/room/<room_id>', methods=['GET'])
 def get_room(room_id):
-    content = get_room_content(room_id)
+    fs = get_file_system(room_id)
     users = get_room_users(room_id)
-    return jsonify({'room_id': room_id, 'content': content, 'users': users})
+    meta = get_room_meta(room_id)
+    return jsonify({'room_id': room_id, 'fs': fs, 'users': users, 'meta': meta})
+
+@app.route('/api/room/<room_id>/meta', methods=['GET', 'POST'])
+def room_meta_route(room_id):
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        meta = get_room_meta(room_id)
+        meta['visibility'] = data.get('visibility', meta.get('visibility', 'public'))
+        meta['password'] = data.get('password', meta.get('password'))
+        set_room_meta(room_id, meta)
+        return jsonify({'ok': True})
+    return jsonify(get_room_meta(room_id))
 
 
 if __name__ == '__main__':
