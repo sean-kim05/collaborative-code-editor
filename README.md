@@ -2,7 +2,8 @@
 
 A real-time collaborative code editor — think VS Code meets Google Docs. Multiple users can write and run code together in the same room, with live cursors, an AI code assistant, version history, and chat.
 
-**Live Demo:** coming soon · [GitHub](https://github.com/sean-kim05/collaborative-code-editor)
+**Live Demo:** [collaborative-code-editor-livid.vercel.app](https://collaborative-code-editor-livid.vercel.app) · [GitHub](https://github.com/sean-kim05/collaborative-code-editor)  
+**Backend API:** https://collaborative-code-editor-1as4.onrender.com
 
 ---
 
