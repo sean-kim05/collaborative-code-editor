@@ -330,6 +330,10 @@ def on_switch_file(data):
 
 # ── REST endpoints ─────────────────────────────────────────────────
 
+@app.route('/health')
+def health():
+    return {'status': 'ok'}
+
 @app.route('/api/run', methods=['POST'])
 def run_code():
     data = request.get_json() or {}
