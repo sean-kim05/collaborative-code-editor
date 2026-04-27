@@ -10,7 +10,36 @@ import json
 import sqlite3
 import threading
 import anthropic
+import httpx
 from datetime import datetime, timezone, timedelta
+
+RESPAN_LOG_URL = 'https://api.keywordsai.co/api/request-logs/create'
+
+
+def _send_respan_log(messages, output, model, max_tokens, status_code, mode):
+    try:
+        api_key = os.getenv('RESPAN_API_KEY')
+        if not api_key:
+            return
+        httpx.post(
+            RESPAN_LOG_URL,
+            json={
+                'model': model,
+                'prompt_messages': [{'role': m['role'], 'content': m['content']} for m in messages],
+                'output': output,
+                'max_tokens': max_tokens,
+                'stream': True,
+                'status_code': status_code,
+                'custom_identifier': mode,
+            },
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            },
+            timeout=10,
+        )
+    except Exception:
+        pass
 
 from database import db
 import rooms as rooms_module
@@ -403,6 +432,8 @@ def ai_assist():
     messages = history + [{'role': 'user', 'content': user_msg}]
 
     def generate():
+        full_output = []
+        status_code = 200
         try:
             client = anthropic.Anthropic(api_key=api_key)
             with client.messages.stream(
@@ -412,12 +443,21 @@ def ai_assist():
                 messages=messages,
             ) as stream:
                 for text in stream.text_stream:
+                    full_output.append(text)
                     yield f"data: {json.dumps({'type': 'text', 'text': text})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except anthropic.AuthenticationError:
+            status_code = 401
             yield f"data: {json.dumps({'type': 'error', 'message': 'AI features unavailable: invalid API key.'})}\n\n"
         except Exception as e:
+            status_code = 500
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        finally:
+            threading.Thread(
+                target=_send_respan_log,
+                args=(messages, ''.join(full_output), 'claude-sonnet-4-6', 2048, status_code, mode),
+                daemon=True,
+            ).start()
 
     return Response(
         generate(),
