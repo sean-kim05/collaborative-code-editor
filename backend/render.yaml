@@ -10,5 +10,28 @@ services:
         value: 3.11.0
       - key: SECRET_KEY
         sync: false
-      - key: REDIS_URL
+      - key: ANTHROPIC_API_KEY
         sync: false
+      - key: RESPAN_API_KEY
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: collabcode-redis
+          property: connectionString
+      - key: DATABASE_URL
+        fromDatabase:
+          name: collabcode-db
+          property: connectionString
+
+  - type: keyvalue
+    name: collabcode-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+databases:
+  - name: collabcode-db
+    plan: free
+    databaseName: collabcode
+    postgresMajorVersion: "16"
