@@ -14,6 +14,7 @@ import VersionHistory from '../components/VersionHistory/VersionHistory';
 import { ToastContainer, useToasts } from '../components/Toast/Toast';
 import type { User, RemoteCursor, RemoteSelection, ChatMessage, FileSystem, TypingUser } from '../types';
 import { getUserColor } from '../utils/userColors';
+import { addRecentRoom } from '../utils/recentRooms';
 import './Room.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
@@ -74,9 +75,10 @@ export default function Room() {
   const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingUploadRef = useRef<{ name: string; content: string } | null>(null);
 
-  // Dynamic page title
+  // Dynamic page title + recent rooms tracking
   useEffect(() => {
     document.title = roomId ? `CollabCode — ${roomId}` : 'CollabCode';
+    if (roomId) addRecentRoom(roomId);
     return () => { document.title = 'CollabCode'; };
   }, [roomId]);
 

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Users, Code2, Globe, Lock, Plus, ArrowRight } from 'lucide-react';
+import { Zap, Users, Code2, Globe, Lock, Plus, ArrowRight, Clock, X } from 'lucide-react';
+import { getRecentRooms, removeRecentRoom, formatRelativeTime, type RecentRoom } from '../utils/recentRooms';
 import './Home.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
@@ -17,6 +18,17 @@ export default function Home() {
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
+  const [recent, setRecent] = useState<RecentRoom[]>([]);
+
+  useEffect(() => {
+    setRecent(getRecentRooms());
+  }, []);
+
+  function handleRemoveRecent(e: React.MouseEvent, roomId: string) {
+    e.stopPropagation();
+    removeRecentRoom(roomId);
+    setRecent(getRecentRooms());
+  }
 
   async function createRoom() {
     setCreating(true);
@@ -147,6 +159,36 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {recent.length > 0 && (
+          <div className="recent-rooms">
+            <div className="recent-rooms-header">
+              <Clock size={14} />
+              <span>Recent Rooms</span>
+            </div>
+            <div className="recent-rooms-list">
+              {recent.map((r) => (
+                <button
+                  key={r.roomId}
+                  className="recent-room-card"
+                  onClick={() => navigate(`/room/${r.roomId}`)}
+                  title={`Visited ${formatRelativeTime(r.visitedAt)}`}
+                >
+                  <span className="recent-room-id">{r.roomId}</span>
+                  <span className="recent-room-time">{formatRelativeTime(r.visitedAt)}</span>
+                  <span
+                    className="recent-room-remove"
+                    onClick={(e) => handleRemoveRecent(e, r.roomId)}
+                    aria-label="Remove from recent"
+                    role="button"
+                  >
+                    <X size={12} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="home-features">
           <div className="feature-card">
