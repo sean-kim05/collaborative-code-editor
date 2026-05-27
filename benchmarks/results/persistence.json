@@ -1,0 +1,4 @@
+{
+  "skipped": true,
+  "reason": "DATABASE_URL not set \u2014 skipping persistence benchmark. Without PostgreSQL the 'cold read' path falls back to in-memory dict, which makes the cold-vs-warm comparison meaningless."
+}
