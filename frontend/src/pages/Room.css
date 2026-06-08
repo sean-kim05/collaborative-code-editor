@@ -246,7 +246,7 @@
 .room-error-btn {
   padding: 8px 20px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   border-radius: 8px;
   font-size: 14px;

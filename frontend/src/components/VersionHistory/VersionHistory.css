@@ -59,7 +59,7 @@
   background: var(--accent);
   border: none;
   border-radius: 6px;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 12px;
   font-weight: 500;
   padding: 5px 12px;
@@ -146,7 +146,7 @@
   background: var(--accent);
   border: none;
   border-radius: 5px;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 11px;
   font-weight: 600;
   padding: 4px 10px;
@@ -167,16 +167,16 @@
   gap: 6px;
   padding: 1px 8px;
 }
-.vh-diff-add { background: rgba(34,197,94,0.08); }
-.vh-diff-remove { background: rgba(239,68,68,0.08); }
+.vh-diff-add { background: color-mix(in srgb, var(--success) 12%, transparent); }
+.vh-diff-remove { background: color-mix(in srgb, var(--error) 12%, transparent); }
 
 .vh-diff-prefix {
   color: var(--text-muted);
   flex-shrink: 0;
   width: 10px;
 }
-.vh-diff-add .vh-diff-prefix { color: #22c55e; }
-.vh-diff-remove .vh-diff-prefix { color: #ef4444; }
+.vh-diff-add .vh-diff-prefix { color: var(--success); }
+.vh-diff-remove .vh-diff-prefix { color: var(--error); }
 
 .vh-diff-text {
   margin: 0;
@@ -185,5 +185,5 @@
   color: var(--text-secondary);
   line-height: 1.5;
 }
-.vh-diff-add .vh-diff-text { color: #86efac; }
-.vh-diff-remove .vh-diff-text { color: #fca5a5; }
+.vh-diff-add .vh-diff-text { color: color-mix(in srgb, var(--success) 60%, var(--text-primary)); }
+.vh-diff-remove .vh-diff-text { color: color-mix(in srgb, var(--error) 60%, var(--text-primary)); }

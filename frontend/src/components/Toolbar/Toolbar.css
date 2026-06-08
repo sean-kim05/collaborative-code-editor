@@ -109,7 +109,7 @@
   padding: 4px;
   min-width: 140px;
   z-index: 100;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-md);
   animation: dropdownIn 0.15s ease;
 }
 
@@ -186,7 +186,7 @@
   top: 2px;
   right: 2px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 9px;
   font-weight: 700;
   border-radius: 8px;

@@ -68,7 +68,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-accent);
   border: 1.5px solid var(--bg-secondary);
 }
 
@@ -93,7 +93,7 @@
   white-space: nowrap;
   z-index: 200;
   pointer-events: none;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-sm);
   animation: tooltipIn 0.15s ease;
 }
 
