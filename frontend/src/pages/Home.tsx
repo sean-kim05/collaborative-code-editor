@@ -125,12 +125,11 @@ export default function Home() {
       </nav>
 
       <main className="home-main">
-        <div className="home-badge">Now in beta</div>
-
-        <h1 className="home-title">
-          <span className="gradient-text">CollabCode</span>
-        </h1>
-        <p className="home-tagline">Write code together, in real time.</p>
+        <h1 className="home-title">CollabCode</h1>
+        <p className="home-tagline">Code together, with Claude in the room.</p>
+        <p className="home-subtitle">
+          Real-time collaborative rooms with Claude built in — to explain, fix, and improve code as you write it.
+        </p>
 
         <div className="home-actions">
           {!showJoin ? (
@@ -192,50 +191,19 @@ export default function Home() {
 
         <div className="home-features">
           <div className="feature-card">
-            <div className="feature-icon" style={{ color: 'var(--accent)' }}><Zap size={20} /></div>
+            <div className="feature-icon"><Zap size={18} /></div>
             <div className="feature-label">Real-time sync</div>
             <div className="feature-desc">Every keystroke synced instantly across all collaborators</div>
           </div>
           <div className="feature-card">
-            <div className="feature-icon" style={{ color: 'var(--accent-secondary)' }}><Users size={20} /></div>
+            <div className="feature-icon"><Users size={18} /></div>
             <div className="feature-label">Live cursors</div>
             <div className="feature-desc">See exactly where your teammates are in the code</div>
           </div>
           <div className="feature-card">
-            <div className="feature-icon" style={{ color: 'var(--success)' }}><Code2 size={20} /></div>
+            <div className="feature-icon"><Code2 size={18} /></div>
             <div className="feature-label">Any language</div>
             <div className="feature-desc">JavaScript, Python, TypeScript, Go, Rust and more</div>
-          </div>
-        </div>
-
-        <div className="home-mockup">
-          <div className="mockup-bar">
-            <div className="mockup-dot" style={{ background: 'var(--error)' }} />
-            <div className="mockup-dot" style={{ background: 'var(--warning)' }} />
-            <div className="mockup-dot" style={{ background: 'var(--success)' }} />
-            <span className="mockup-title">CollabCode — room/a1b2c3d4</span>
-          </div>
-          <div className="mockup-body">
-            <div className="mockup-sidebar">
-              <div className="mockup-file active">main.ts</div>
-              <div className="mockup-file">utils.ts</div>
-              <div className="mockup-file">types.ts</div>
-            </div>
-            <div className="mockup-editor">
-              {[
-                { indent: 0, color: 'var(--accent)', text: 'const' },
-                { indent: 1, color: 'var(--accent-secondary)', text: 'function' },
-                { indent: 1, color: 'var(--text-secondary)', text: '' },
-                { indent: 2, color: 'var(--accent)', text: 'return' },
-                { indent: 1, color: 'var(--text-muted)', text: '}' },
-              ].map((line, i) => (
-                <div key={i} className="mockup-line" style={{ paddingLeft: `${line.indent * 16}px` }}>
-                  <span className="mockup-ln">{i + 1}</span>
-                  <span className="mockup-code" style={{ background: line.color, width: `${60 + Math.random() * 80}px` }} />
-                </div>
-              ))}
-              <div className="mockup-cursor" />
-            </div>
           </div>
         </div>
       </main>
