@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   height: 24px;
-  padding: 0 12px;
+  padding: 0 var(--sp-12);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
@@ -12,7 +12,7 @@
 .status-left, .status-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-12);
 }
 
 .status-item {
@@ -28,7 +28,7 @@
 .status-conn {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-6);
   font-size: 11px;
   color: var(--text-muted);
 }

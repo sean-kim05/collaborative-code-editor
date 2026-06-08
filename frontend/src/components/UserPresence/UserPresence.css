@@ -88,8 +88,8 @@
   transform: translateX(-50%);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  padding: var(--sp-8) var(--sp-10);
   white-space: nowrap;
   z-index: 200;
   pointer-events: none;
@@ -111,5 +111,5 @@
 .tooltip-status {
   font-size: 11px;
   color: var(--success);
-  margin-top: 1px;
+  margin-top: var(--sp-2);
 }

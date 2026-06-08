@@ -18,7 +18,7 @@
 .modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   width: 420px;
   max-width: calc(100vw - 32px);
   box-shadow: var(--shadow-lg);
@@ -34,7 +34,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px 14px;
+  padding: var(--sp-20) var(--sp-20) var(--sp-14);
   border-bottom: 1px solid var(--border);
 }
 
@@ -47,21 +47,21 @@
 .modal-close {
   color: var(--text-muted);
   font-size: 13px;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: var(--sp-4) var(--sp-6);
+  border-radius: var(--radius-xs);
   transition: color 0.15s, background 0.15s;
   cursor: pointer;
 }
 .modal-close:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
 .modal-body {
-  padding: 20px;
+  padding: var(--sp-20);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--sp-20);
 }
 
-.modal-section { display: flex; flex-direction: column; gap: 8px; }
+.modal-section { display: flex; flex-direction: column; gap: var(--sp-8); }
 
 .modal-label {
   font-size: 11px;
@@ -71,24 +71,24 @@
   color: var(--text-muted);
 }
 
-.url-row { display: flex; gap: 8px; }
+.url-row { display: flex; gap: var(--sp-8); }
 
 .url-input {
   flex: 1;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  padding: 9px 12px;
-  border-radius: 7px;
+  padding: var(--sp-10) var(--sp-12);
+  border-radius: var(--radius-md);
   font-size: 12px;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .copy-btn {
-  padding: 9px 16px;
+  padding: var(--sp-10) var(--sp-16);
   background: var(--accent);
   color: var(--on-accent);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -107,8 +107,8 @@
 .room-id-display {
   background: var(--bg-primary);
   border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  padding: var(--sp-10) var(--sp-12);
 }
 
 .room-id-code {

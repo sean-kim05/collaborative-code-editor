@@ -2,10 +2,10 @@
   display: flex;
   align-items: center;
   height: 48px;
-  padding: 0 16px;
+  padding: 0 var(--sp-16);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  gap: 12px;
+  gap: var(--sp-12);
   flex-shrink: 0;
   position: relative;
   z-index: 50;
@@ -14,7 +14,7 @@
 .toolbar-left, .toolbar-right, .toolbar-center {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .toolbar-right { margin-left: auto; }
@@ -30,7 +30,7 @@
 .tb-logo {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-8);
   flex-shrink: 0;
 }
 
@@ -38,7 +38,7 @@
   width: 24px;
   height: 24px;
   background: var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -57,11 +57,11 @@
 .room-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: var(--sp-6);
+  padding: var(--sp-4) var(--sp-10);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -84,11 +84,11 @@
 .lang-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-10);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   color: var(--text-primary);
   cursor: pointer;
@@ -105,8 +105,8 @@
   left: 0;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px;
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
   min-width: 140px;
   z-index: 100;
   box-shadow: var(--shadow-md);
@@ -123,8 +123,8 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 7px 10px;
-  border-radius: 5px;
+  padding: var(--sp-8) var(--sp-10);
+  border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -140,15 +140,15 @@
 .font-ctrl {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-2);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .font-btn {
-  padding: 5px 9px;
+  padding: var(--sp-6) var(--sp-10);
   font-size: 14px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -172,7 +172,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 15px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -189,8 +189,8 @@
   color: var(--on-accent);
   font-size: 9px;
   font-weight: 700;
-  border-radius: 8px;
-  padding: 1px 4px;
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-4);
   min-width: 14px;
   text-align: center;
   line-height: 1.4;
@@ -199,11 +199,11 @@
 .tb-share-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-12);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text-primary);
   cursor: pointer;
@@ -214,12 +214,12 @@
 .tb-run-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 14px;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-14);
   background: color-mix(in srgb, var(--success) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
   color: var(--success);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -240,11 +240,11 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .tb-leave-btn {
-  padding: 6px 12px;
+  padding: var(--sp-6) var(--sp-12);
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
   color: var(--error);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s;
@@ -254,12 +254,12 @@
 .tb-following-chip {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: var(--sp-6);
+  padding: var(--sp-4) var(--sp-10);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   color: var(--accent);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;

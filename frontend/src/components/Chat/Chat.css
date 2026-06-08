@@ -18,7 +18,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 14px 16px 12px;
+  padding: var(--sp-14) var(--sp-16) var(--sp-12);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -32,14 +32,14 @@
 .chat-count {
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .chat-close {
   color: var(--text-muted);
   font-size: 12px;
-  padding: 3px 5px;
-  border-radius: 4px;
+  padding: var(--sp-4) var(--sp-6);
+  border-radius: var(--radius-xs);
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
 }
@@ -48,10 +48,10 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: var(--sp-12);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-12);
 }
 
 .chat-empty {
@@ -60,8 +60,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 40px 0;
+  gap: var(--sp-4);
+  padding: var(--sp-40) 0;
 }
 
 .chat-empty-icon { font-size: 28px; opacity: 0.4; }
@@ -71,13 +71,13 @@
 .chat-message {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 
 .chat-meta {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-6);
 }
 
 .self-meta { justify-content: flex-end; }
@@ -104,8 +104,8 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  padding: 8px 11px;
-  border-radius: 8px;
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--radius-md);
   font-size: 13px;
   line-height: 1.5;
   word-break: break-word;
@@ -119,8 +119,8 @@
 
 .chat-input-area {
   display: flex;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--sp-8);
+  padding: var(--sp-12);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -130,8 +130,8 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  padding: 8px 12px;
-  border-radius: 7px;
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--radius-md);
   font-size: 13px;
   transition: border-color 0.15s;
 }
@@ -143,7 +143,7 @@
   height: 34px;
   background: var(--accent);
   color: var(--on-accent);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   font-size: 15px;
   display: flex;
   align-items: center;

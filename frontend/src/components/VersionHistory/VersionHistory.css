@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: var(--sp-10) var(--sp-14);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -29,15 +29,15 @@
   color: var(--text-muted);
   cursor: pointer;
   font-size: 13px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: var(--sp-2) var(--sp-6);
+  border-radius: var(--radius-xs);
 }
 .vh-close:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
 .vh-save-row {
   display: flex;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: var(--sp-6);
+  padding: var(--sp-10) var(--sp-12);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -46,10 +46,10 @@
   flex: 1;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 12px;
-  padding: 5px 8px;
+  padding: var(--sp-6) var(--sp-8);
   outline: none;
 }
 .vh-label-input:focus { border-color: var(--accent); }
@@ -58,11 +58,11 @@
 .vh-save-btn {
   background: var(--accent);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--on-accent);
   font-size: 12px;
   font-weight: 500;
-  padding: 5px 12px;
+  padding: var(--sp-6) var(--sp-12);
   cursor: pointer;
   white-space: nowrap;
   transition: opacity 0.15s;
@@ -72,11 +72,11 @@
 .vh-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0;
+  padding: var(--sp-6) 0;
 }
 
 .vh-empty {
-  padding: 20px;
+  padding: var(--sp-20);
   text-align: center;
   font-size: 12px;
   color: var(--text-muted);
@@ -84,7 +84,7 @@
 }
 
 .vh-item {
-  padding: 10px 14px;
+  padding: var(--sp-10) var(--sp-14);
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;
@@ -95,7 +95,7 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 3px;
+  margin-bottom: var(--sp-4);
 }
 
 .vh-item-meta {
@@ -114,8 +114,8 @@
 .vh-diff-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-12);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -123,10 +123,10 @@
 .vh-back-btn {
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-size: 11px;
-  padding: 3px 8px;
+  padding: var(--sp-4) var(--sp-8);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -145,11 +145,11 @@
 .vh-restore-btn {
   background: var(--accent);
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: var(--on-accent);
   font-size: 11px;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: var(--sp-4) var(--sp-10);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -164,8 +164,8 @@
 .vh-diff-line {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  padding: 1px 8px;
+  gap: var(--sp-6);
+  padding: var(--sp-2) var(--sp-8);
 }
 .vh-diff-add { background: color-mix(in srgb, var(--success) 12%, transparent); }
 .vh-diff-remove { background: color-mix(in srgb, var(--error) 12%, transparent); }
