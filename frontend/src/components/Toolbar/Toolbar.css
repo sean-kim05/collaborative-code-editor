@@ -266,3 +266,16 @@
   transition: background var(--dur-base) var(--ease);
 }
 .tb-following-chip:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+
+/* ── Responsive: condense the toolbar on narrow viewports ───── */
+@media (max-width: 768px) {
+  .toolbar { padding: 0 var(--sp-10); gap: var(--sp-8); }
+  .tb-logo-text { display: none; }
+  .room-pill-copy { display: none; }
+  .font-ctrl { display: none; }
+}
+
+@media (max-width: 480px) {
+  .toolbar { gap: var(--sp-6); }
+  .room-pill { display: none; }
+}
