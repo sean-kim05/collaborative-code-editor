@@ -84,7 +84,7 @@ export default function VersionHistory({ roomId, currentCode, currentFileName, c
     <div className="vh-panel">
       <div className="vh-header">
         <span className="vh-title"><History size={14} /> Version History</span>
-        <button className="vh-close" onClick={onClose}><X size={13} /></button>
+        <button className="vh-close" onClick={onClose} aria-label="Close version history"><X size={13} /></button>
       </div>
 
       <div className="vh-save-row">

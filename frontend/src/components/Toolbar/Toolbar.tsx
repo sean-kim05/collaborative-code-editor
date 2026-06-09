@@ -97,9 +97,9 @@ export default function Toolbar({
         </div>
 
         <div className="font-ctrl">
-          <button className="font-btn" onClick={() => onFontSizeChange(Math.max(10, fontSize - 1))}><Minus size={12} /></button>
+          <button className="font-btn" onClick={() => onFontSizeChange(Math.max(10, fontSize - 1))} aria-label="Decrease font size"><Minus size={12} /></button>
           <span className="font-val">{fontSize}</span>
-          <button className="font-btn" onClick={() => onFontSizeChange(Math.min(24, fontSize + 1))}><Plus size={12} /></button>
+          <button className="font-btn" onClick={() => onFontSizeChange(Math.min(24, fontSize + 1))} aria-label="Increase font size"><Plus size={12} /></button>
         </div>
       </div>
 

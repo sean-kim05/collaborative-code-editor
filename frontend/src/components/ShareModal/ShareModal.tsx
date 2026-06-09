@@ -24,7 +24,7 @@ export default function ShareModal({ roomId, onClose, onCopied }: Props) {
       <div className="modal">
         <div className="modal-header">
           <div className="modal-title">Share room</div>
-          <button className="modal-close" onClick={onClose}><X size={14} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
 
         <div className="modal-body">

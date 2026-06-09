@@ -44,7 +44,7 @@ export default function Chat({ messages, onSend, onClose, currentUsername, userC
           <div className="chat-title">Room Chat</div>
           <div className="chat-count">{userCount} {userCount === 1 ? 'person' : 'people'} in this room</div>
         </div>
-        <button className="chat-close" onClick={onClose}><X size={14} /></button>
+        <button className="chat-close" onClick={onClose} aria-label="Close chat"><X size={14} /></button>
       </div>
 
       <div className="chat-messages">
@@ -89,7 +89,7 @@ export default function Chat({ messages, onSend, onClose, currentUsername, userC
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKey}
         />
-        <button className="chat-send" onClick={handleSend} disabled={!input.trim()}><Send size={13} /></button>
+        <button className="chat-send" onClick={handleSend} disabled={!input.trim()} aria-label="Send message"><Send size={13} /></button>
       </div>
     </div>
   );

@@ -48,7 +48,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
     <div className={`toast toast-${toast.type} ${visible ? 'toast-visible' : ''}`}>
       <span className="toast-icon">{ICONS[toast.type]}</span>
       <span className="toast-message">{toast.message}</span>
-      <button className="toast-close" onClick={() => { setVisible(false); setTimeout(() => onDismiss(toast.id), 300); }}><X size={12} /></button>
+      <button className="toast-close" onClick={() => { setVisible(false); setTimeout(() => onDismiss(toast.id), 300); }} aria-label="Dismiss notification"><X size={12} /></button>
     </div>
   );
 }

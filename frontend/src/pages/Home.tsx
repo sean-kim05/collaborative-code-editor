@@ -60,7 +60,7 @@ export default function Home() {
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">Create Room</span>
-              <button className="modal-close" onClick={() => setShowCreate(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowCreate(false)} aria-label="Close">✕</button>
             </div>
 
             <div className="modal-body">

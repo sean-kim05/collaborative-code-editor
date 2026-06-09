@@ -18,7 +18,7 @@
   /* ── Text — warm neutral (AA verified in a11y pass) ── */
   --text-primary:   #ece8de;
   --text-secondary: #a8a294;
-  --text-muted:     #847e6f;  /* nudged lighter — passes WCAG AA on bg-primary (~4.9:1) */
+  --text-muted:     #8c8677;  /* nudged lighter — passes WCAG AA on all surfaces incl. bg-tertiary */
 
   /* ── Semantic (functional + distinct) ── */
   --success: #10b981;
