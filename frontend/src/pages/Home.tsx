@@ -149,13 +149,13 @@ export default function Home() {
       <main className="home-main">
         <section className="hero">
           <div className="hero-copy">
-            <div className="hero-eyebrow">REAL-TIME · CLAUDE BUILT-IN</div>
+            <div className="hero-eyebrow">MULTIPLAYER CODE EDITOR</div>
             <h1 className="hero-title">
-              Code together, with <span className="accent">Claude</span> in the room.
+              Code together, in real time.
             </h1>
             <p className="hero-sub">
-              Real-time collaborative rooms with live cursors, sub-20ms sync, and a built-in Claude
-              assistant that explains, fixes, and improves code as you write it.
+              A multiplayer code editor with live cursors, sub-20ms sync, and in-browser
+              runtimes — plus an AI assistant when you want one.
             </p>
             {actions}
             <div className="hero-meta">No sign-up&nbsp;&nbsp;·&nbsp;&nbsp;Share a link&nbsp;&nbsp;·&nbsp;&nbsp;p95 sync &lt; 17ms</div>
@@ -174,8 +174,8 @@ export default function Home() {
             <span className="proof-label">p95 sync latency</span>
           </div>
           <div className="proof-item">
-            <span className="proof-val">Claude</span>
-            <span className="proof-label">in every room</span>
+            <span className="proof-val">Live</span>
+            <span className="proof-label">multiplayer cursors</span>
           </div>
           <div className="proof-item">
             <span className="proof-val">JS · Python</span>
@@ -184,11 +184,6 @@ export default function Home() {
         </section>
 
         <section className="features" id="features">
-          <div className="feature-card">
-            <div className="feature-icon"><Sparkles size={18} /></div>
-            <div className="feature-label">Claude, built in</div>
-            <div className="feature-desc">Explain, fix, improve, or generate code without leaving the editor.</div>
-          </div>
           <div className="feature-card">
             <div className="feature-icon"><Zap size={18} /></div>
             <div className="feature-label">Sub-20ms sync</div>
@@ -203,6 +198,11 @@ export default function Home() {
             <div className="feature-icon"><Play size={18} /></div>
             <div className="feature-label">Run in-browser</div>
             <div className="feature-desc">Execute JavaScript and Python right inside the room — no setup.</div>
+          </div>
+          <div className="feature-card">
+            <div className="feature-icon"><Sparkles size={18} /></div>
+            <div className="feature-label">AI, built in</div>
+            <div className="feature-desc">Explain, fix, improve, or generate code without leaving the editor.</div>
           </div>
         </section>
 
