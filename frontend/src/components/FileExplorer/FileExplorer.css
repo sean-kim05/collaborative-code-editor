@@ -13,12 +13,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-8) var(--sp-12);
-  font-size: 10px;
+  height: 40px;
+  padding: 0 var(--sp-14);
+  font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
+  color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -38,7 +37,7 @@
   line-height: 1;
   padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-xs);
-  transition: color 0.15s;
+  transition: color var(--dur-base) var(--ease);
   display: flex;
   align-items: center;
 }
@@ -84,7 +83,7 @@
   cursor: pointer;
   font-size: 12px;
   color: var(--text-secondary);
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
   position: relative;
 }
 .fe-file:hover { background: var(--bg-tertiary); color: var(--text-primary); }
@@ -162,7 +161,7 @@
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .fe-context-menu button:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 .fe-context-menu button.danger { color: var(--error); }

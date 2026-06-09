@@ -12,15 +12,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-10) var(--sp-14);
+  height: 40px;
+  padding: 0 var(--sp-14);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .vh-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .vh-close {
@@ -65,7 +66,7 @@
   padding: var(--sp-6) var(--sp-12);
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 0.15s;
+  transition: opacity var(--dur-base) var(--ease);
 }
 .vh-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -87,7 +88,7 @@
   padding: var(--sp-10) var(--sp-14);
   cursor: pointer;
   border-bottom: 1px solid var(--border);
-  transition: background 0.1s;
+  transition: background var(--dur-fast) var(--ease);
 }
 .vh-item:hover { background: var(--bg-tertiary); }
 

@@ -49,7 +49,7 @@
   font-size: 13px;
   padding: var(--sp-4) var(--sp-6);
   border-radius: var(--radius-xs);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
   cursor: pointer;
 }
 .modal-close:hover { color: var(--text-primary); background: var(--bg-tertiary); }
@@ -92,7 +92,7 @@
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background var(--dur-base) var(--ease);
   cursor: pointer;
 }
 .copy-btn:hover { background: var(--accent-hover); }

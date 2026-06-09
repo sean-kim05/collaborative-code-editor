@@ -18,7 +18,7 @@
   /* ── Text — warm neutral (AA verified in a11y pass) ── */
   --text-primary:   #ece8de;
   --text-secondary: #a8a294;
-  --text-muted:     #767063;
+  --text-muted:     #847e6f;  /* nudged lighter — passes WCAG AA on bg-primary (~4.9:1) */
 
   /* ── Semantic (functional + distinct) ── */
   --success: #10b981;
@@ -35,9 +35,9 @@
   --avatar-6: #ec4899;
 
   /* ── Elevation ── */
-  --shadow-sm: 0 8px 24px rgba(0,0,0,0.40);
-  --shadow-md: 0 12px 40px rgba(0,0,0,0.50);
-  --shadow-lg: 0 24px 64px rgba(0,0,0,0.60);
+  --shadow-sm: 0 4px 16px rgba(0,0,0,0.35);
+  --shadow-md: 0 8px 28px rgba(0,0,0,0.45);
+  --shadow-lg: 0 18px 50px rgba(0,0,0,0.55);
   --overlay:   rgba(0,0,0,0.60);
 
   /* ── Spacing scale (2px grid — fits a dense IDE) ── */
@@ -48,6 +48,15 @@
   /* ── Radius scale ── */
   --radius-xs: 4px;  --radius-sm: 6px;  --radius-md: 8px;
   --radius-lg: 12px; --radius-xl: 16px; --radius-pill: 999px;
+
+  /* ── Motion — one easing curve, one duration family ── */
+  --ease:      cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast:  120ms;  /* dense micro-interactions: tabs, file rows, presses */
+  --dur-base:  160ms;  /* default: hover/focus on buttons, inputs, links, chips */
+
+  /* ── Focus ring (keyboard navigation) ── */
+  --focus-width: 2px;
+  --focus-color: var(--accent);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -72,6 +81,12 @@ button, input, select, textarea {
 }
 
 button { cursor: pointer; }
+
+/* Visible focus ring for keyboard navigation only (not mouse clicks) */
+:focus-visible {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: 2px;
+}
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

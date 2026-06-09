@@ -63,7 +63,7 @@
   padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-xs);
   flex-shrink: 0;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
   cursor: pointer;
 }
 .toast-close:hover { color: var(--text-primary); background: var(--bg-primary); }

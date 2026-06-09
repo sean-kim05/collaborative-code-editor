@@ -12,7 +12,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-10) var(--sp-14);
+  height: 40px;
+  padding: 0 var(--sp-14);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -48,7 +49,7 @@
   padding: var(--sp-4) var(--sp-6);
   border-radius: var(--radius-xs);
   font-size: 13px;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
 }
 .ai-icon-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
@@ -70,13 +71,14 @@
   cursor: pointer;
   font-size: 11px;
   color: var(--text-muted);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
   border-bottom: 2px solid transparent;
 }
 .ai-mode-btn:hover { color: var(--text-secondary); background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .ai-mode-btn.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .ai-mode-btn span:first-child { font-size: 15px; }
 
@@ -187,7 +189,7 @@
   padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--dur-base) var(--ease);
   margin-top: var(--sp-2);
 }
 .ai-apply-btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -210,7 +212,7 @@
   padding: var(--sp-6) var(--sp-10);
   font-family: 'JetBrains Mono', monospace;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-base) var(--ease);
 }
 .ai-error-input:focus { border-color: var(--error); }
 .ai-error-input::placeholder { color: var(--text-muted); }
@@ -229,7 +231,7 @@
   font-size: 13px;
   padding: var(--sp-8) var(--sp-10);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-base) var(--ease);
   font-family: inherit;
 }
 .ai-input:focus { border-color: var(--accent); }
@@ -247,9 +249,10 @@
   justify-content: center;
   cursor: pointer;
   font-size: 14px;
-  transition: opacity 0.15s;
+  transition: background var(--dur-base) var(--ease), opacity var(--dur-base) var(--ease);
   flex-shrink: 0;
 }
+.ai-send-btn:hover:not(:disabled) { background: var(--accent-hover); }
 .ai-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .ai-action-btn {
@@ -266,7 +269,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--sp-6);
-  transition: opacity 0.15s;
+  transition: opacity var(--dur-base) var(--ease);
 }
 .ai-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ai-action-btn:hover:not(:disabled) { opacity: 0.9; }
@@ -293,6 +296,6 @@
   border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--dur-base) var(--ease);
 }
 .ai-retry-btn:hover { background: color-mix(in srgb, var(--error) 20%, transparent); }

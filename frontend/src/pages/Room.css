@@ -47,7 +47,7 @@
   padding: var(--sp-2) var(--sp-6);
   border-radius: var(--radius-xs);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
 }
 .welcome-dismiss:hover { color: var(--text-primary); background: color-mix(in srgb, var(--accent) 15%, transparent); }
 
@@ -95,7 +95,7 @@
   padding: var(--sp-2) var(--sp-6);
   border-radius: var(--radius-xs);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
   margin-left: auto;
 }
 .output-btn + .output-btn { margin-left: 0; }
@@ -135,7 +135,7 @@
   cursor: ns-resize;
   background: transparent;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background var(--dur-base) var(--ease);
 }
 .output-resize-handle:hover { background: var(--accent); }
 
@@ -176,7 +176,7 @@
   cursor: pointer;
   border-right: 1px solid var(--border);
   white-space: nowrap;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
   flex-shrink: 0;
 }
 .editor-tab:hover { background: var(--bg-tertiary); color: var(--text-secondary); }
