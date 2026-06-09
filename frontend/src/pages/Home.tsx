@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Users, Code2, Globe, Lock, Plus, ArrowRight, Clock, X } from 'lucide-react';
-import { getRecentRooms, removeRecentRoom, formatRelativeTime, type RecentRoom } from '../utils/recentRooms';
+import { Code2, Globe, Lock, Plus, ArrowRight, Sparkles, Zap, Users, Play } from 'lucide-react';
 import './Home.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
@@ -18,17 +17,6 @@ export default function Home() {
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
-  const [recent, setRecent] = useState<RecentRoom[]>([]);
-
-  useEffect(() => {
-    setRecent(getRecentRooms());
-  }, []);
-
-  function handleRemoveRecent(e: React.MouseEvent, roomId: string) {
-    e.stopPropagation();
-    removeRecentRoom(roomId);
-    setRecent(getRecentRooms());
-  }
 
   async function createRoom() {
     setCreating(true);
@@ -50,6 +38,36 @@ export default function Home() {
     const id = raw.startsWith('http') ? raw.split('/room/')[1]?.split('?')[0] : raw;
     if (id) navigate(`/room/${id}`);
   }
+
+  const actions = (
+    <div className="home-actions">
+      {!showJoin ? (
+        <>
+          <button className="btn-primary" onClick={() => setShowCreate(true)}>
+            <Plus size={15} /> Create Room
+          </button>
+          <button className="btn-outline" onClick={() => setShowJoin(true)}>
+            Join Room
+          </button>
+        </>
+      ) : (
+        <div className="join-form">
+          <input
+            className="join-input"
+            placeholder="Paste room ID or URL…"
+            value={joinId}
+            onChange={(e) => setJoinId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && joinRoom()}
+            autoFocus
+          />
+          <button className="btn-primary" onClick={joinRoom} disabled={!joinId.trim()}>
+            Join <ArrowRight size={14} />
+          </button>
+          <button className="btn-ghost" onClick={() => setShowJoin(false)}>Cancel</button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="home">
@@ -121,92 +139,100 @@ export default function Home() {
           <span className="nav-logo-icon"><Code2 size={16} /></span>
           <span className="nav-logo-text">CollabCode</span>
         </div>
-        <a className="nav-link" href="https://github.com/sean-kim05/collaborative-code-editor" target="_blank" rel="noreferrer">GitHub</a>
+        <div className="home-nav-right">
+          <a className="nav-link" href="#features">Features</a>
+          <a className="nav-link" href="https://github.com/sean-kim05/collaborative-code-editor" target="_blank" rel="noreferrer">GitHub</a>
+          <button className="nav-cta" onClick={() => setShowCreate(true)}>New room</button>
+        </div>
       </nav>
 
       <main className="home-main">
-        <h1 className="home-title">CollabCode</h1>
-        <p className="home-tagline">Code together, with Claude in the room.</p>
-        <p className="home-subtitle">
-          Real-time collaborative rooms with Claude built in — to explain, fix, and improve code as you write it.
-        </p>
+        <section className="hero">
+          <div className="hero-copy">
+            <div className="hero-eyebrow">REAL-TIME · CLAUDE BUILT-IN</div>
+            <h1 className="hero-title">
+              Code together, with <span className="accent">Claude</span> in the room.
+            </h1>
+            <p className="hero-sub">
+              Real-time collaborative rooms with live cursors, sub-20ms sync, and a built-in Claude
+              assistant that explains, fixes, and improves code as you write it.
+            </p>
+            {actions}
+            <div className="hero-meta">No sign-up&nbsp;&nbsp;·&nbsp;&nbsp;Share a link&nbsp;&nbsp;·&nbsp;&nbsp;p95 sync &lt; 17ms</div>
+          </div>
 
-        <div className="home-actions">
-          {!showJoin ? (
-            <>
-              <button className="btn-primary" onClick={() => setShowCreate(true)}>
-                <Plus size={15} /> Create Room
-              </button>
-              <button className="btn-outline" onClick={() => setShowJoin(true)}>
-                Join Room
-              </button>
-            </>
-          ) : (
-            <div className="join-form">
-              <input
-                className="join-input"
-                placeholder="Paste room ID or URL…"
-                value={joinId}
-                onChange={(e) => setJoinId(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && joinRoom()}
-                autoFocus
-              />
-              <button className="btn-primary" onClick={joinRoom} disabled={!joinId.trim()}>
-                Join <ArrowRight size={14} />
-              </button>
-              <button className="btn-ghost" onClick={() => setShowJoin(false)}>Cancel</button>
-            </div>
-          )}
-        </div>
-
-        {recent.length > 0 && (
-          <div className="recent-rooms">
-            <div className="recent-rooms-header">
-              <Clock size={14} />
-              <span>Recent Rooms</span>
-            </div>
-            <div className="recent-rooms-list">
-              {recent.map((r) => (
-                <button
-                  key={r.roomId}
-                  className="recent-room-card"
-                  onClick={() => navigate(`/room/${r.roomId}`)}
-                  title={`Visited ${formatRelativeTime(r.visitedAt)}`}
-                >
-                  <span className="recent-room-id">{r.roomId}</span>
-                  <span className="recent-room-time">{formatRelativeTime(r.visitedAt)}</span>
-                  <span
-                    className="recent-room-remove"
-                    onClick={(e) => handleRemoveRecent(e, r.roomId)}
-                    aria-label="Remove from recent"
-                    role="button"
-                  >
-                    <X size={12} />
-                  </span>
-                </button>
-              ))}
+          <div className="hero-shot" aria-hidden="true">
+            <div className="shot-frame">
+              <img className="shot-img" src="/hero-editor.png" alt="" loading="eager" />
             </div>
           </div>
-        )}
+        </section>
 
-        <div className="home-features">
+        <section className="proof">
+          <div className="proof-item">
+            <span className="proof-val">&lt;&nbsp;17ms</span>
+            <span className="proof-label">p95 sync latency</span>
+          </div>
+          <div className="proof-item">
+            <span className="proof-val">Claude</span>
+            <span className="proof-label">in every room</span>
+          </div>
+          <div className="proof-item">
+            <span className="proof-val">JS · Python</span>
+            <span className="proof-label">run in-browser</span>
+          </div>
+        </section>
+
+        <section className="features" id="features">
+          <div className="feature-card">
+            <div className="feature-icon"><Sparkles size={18} /></div>
+            <div className="feature-label">Claude, built in</div>
+            <div className="feature-desc">Explain, fix, improve, or generate code without leaving the editor.</div>
+          </div>
           <div className="feature-card">
             <div className="feature-icon"><Zap size={18} /></div>
-            <div className="feature-label">Real-time sync</div>
-            <div className="feature-desc">Every keystroke synced instantly across all collaborators</div>
+            <div className="feature-label">Sub-20ms sync</div>
+            <div className="feature-desc">Benchmarked p95 under 17ms — every keystroke, shared instantly.</div>
           </div>
           <div className="feature-card">
             <div className="feature-icon"><Users size={18} /></div>
             <div className="feature-label">Live cursors</div>
-            <div className="feature-desc">See exactly where your teammates are in the code</div>
+            <div className="feature-desc">See exactly where your teammates are, across every file.</div>
           </div>
           <div className="feature-card">
-            <div className="feature-icon"><Code2 size={18} /></div>
-            <div className="feature-label">Any language</div>
-            <div className="feature-desc">JavaScript, Python, TypeScript, Go, Rust and more</div>
+            <div className="feature-icon"><Play size={18} /></div>
+            <div className="feature-label">Run in-browser</div>
+            <div className="feature-desc">Execute JavaScript and Python right inside the room — no setup.</div>
           </div>
-        </div>
+        </section>
+
+        <section className="cta-band">
+          <div className="cta-eyebrow">START IN ONE CLICK</div>
+          <div className="cta-line">No accounts. No setup. Share a link.</div>
+          <div className="home-actions">
+            <button className="btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus size={15} /> Create Room
+            </button>
+            <button
+              className="btn-outline"
+              onClick={() => { setShowJoin(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            >
+              Join Room
+            </button>
+          </div>
+        </section>
       </main>
+
+      <footer className="home-footer">
+        <div className="footer-left">
+          <span className="nav-logo-icon"><Code2 size={14} /></span>
+          <span className="footer-name">CollabCode</span>
+        </div>
+        <div className="footer-right">
+          <a className="nav-link" href="https://github.com/sean-kim05/collaborative-code-editor" target="_blank" rel="noreferrer">GitHub</a>
+          <span className="footer-credit">Built with Monaco · Flask · Socket.IO · Redis</span>
+        </div>
+      </footer>
     </div>
   );
 }
