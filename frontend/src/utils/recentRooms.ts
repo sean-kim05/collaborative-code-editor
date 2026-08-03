@@ -1,3 +1,15 @@
+/**
+ * Recently-visited rooms, in localStorage.
+ *
+ * Rooms have no owner and no directory, so a link is the only handle you have
+ * on one — losing it means losing the room. This is the client-side substitute
+ * for the "your projects" list an account system would provide.
+ *
+ * Every read is defensive (`try`/`catch` plus a shape check) because
+ * localStorage is shared, user-editable, and can be disabled outright in
+ * private-browsing modes: a corrupt entry degrades to an empty list rather than
+ * throwing on app start.
+ */
 const STORAGE_KEY = 'collab_recent_rooms';
 const MAX_ROOMS = 10;
 
@@ -30,6 +42,8 @@ export function getRecentRooms(): RecentRoom[] {
   return read().sort((a, b) => b.visitedAt - a.visitedAt);
 }
 
+/** Record a visit. Remove-then-unshift keeps the list MRU-ordered and free of
+ *  duplicates in one pass; the tail beyond `MAX_ROOMS` is dropped. */
 export function addRecentRoom(roomId: string): void {
   if (!roomId) return;
   const now = Date.now();
@@ -42,6 +56,8 @@ export function removeRecentRoom(roomId: string): void {
   write(read().filter((r) => r.roomId !== roomId));
 }
 
+/** "just now" / "5m ago" / "3h ago" / "2d ago", falling back to an absolute
+ *  date past a month — beyond that, relative time stops being informative. */
 export function formatRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60_000);

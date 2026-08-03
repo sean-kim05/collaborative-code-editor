@@ -15,8 +15,18 @@ interface Props {
   onFollow?: (sessionId: string | null) => void;
 }
 
+/**
+ * Overlapping avatar stack (Figma/Google Docs style). Clicking a peer toggles
+ * follow mode, which pins your viewport to their cursor until you click again
+ * or press Escape.
+ *
+ * Colours come from position in the list, not from `user.color` — the toolbar
+ * needs a consistent visual rhythm, while cursor colours are name-derived so
+ * they stay stable across sessions.
+ */
 export default function UserPresence({ users, currentSessionId, followingUserId, onFollow }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Cap at 5 avatars plus a "+N" chip — the toolbar has a fixed width budget.
   const visible = users.slice(0, 5);
   const overflow = users.length - 5;
 
@@ -32,6 +42,8 @@ export default function UserPresence({ users, currentSessionId, followingUserId,
           <div
             key={user.session_id}
             className={`avatar ${isFollowing ? 'avatar-followed' : ''} ${isInFollowMode && !isFollowing ? 'avatar-dimmed' : ''} ${!isSelf && onFollow ? 'avatar-clickable' : ''}`}
+            // Descending z-index so avatars overlap left-over-right; the CSS
+            // var lets the stylesheet own every other aspect of the styling.
             style={{ '--avatar-color': color, zIndex: visible.length - i } as React.CSSProperties}
             onMouseEnter={() => setHoveredId(user.session_id)}
             onMouseLeave={() => setHoveredId(null)}

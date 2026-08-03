@@ -19,6 +19,19 @@ function formatDate(iso: string) {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * Line diff between a snapshot and the current file, for the preview pane.
+ *
+ * Positional comparison: line i vs line i, differing lines emitted as a
+ * remove/add pair. Deliberately not a real LCS/Myers diff — ~15 lines instead
+ * of a dependency, and it reads correctly for the common case (edits in place).
+ *
+ * The tradeoff, worth naming rather than hiding: inserting a line near the top
+ * shifts every following line, so everything below shows as changed. A real
+ * diff aligns unchanged runs first. Acceptable here because this is a preview
+ * to answer "is this the version I want?", not a review tool — the Restore
+ * button doesn't depend on the diff being minimal.
+ */
 function diffLines(a: string, b: string) {
   const aLines = a.split('\n');
   const bLines = b.split('\n');
@@ -54,6 +67,8 @@ export default function VersionHistory({ roomId, currentCode, currentFileName, c
     setLoading(false);
   }
 
+  /** Save a labelled checkpoint, then refetch so the new entry appears without
+   *  optimistically guessing the id the server assigned. */
   async function saveManual() {
     setSaving(true);
     await fetch(`${SOCKET_URL}/api/snapshots/${roomId}`, {
@@ -71,6 +86,9 @@ export default function VersionHistory({ roomId, currentCode, currentFileName, c
     setSaving(false);
   }
 
+  /** Fetch a snapshot's body on click. The list endpoint omits content, so this
+   *  second request is what makes opening the panel cheap regardless of how
+   *  much history a room has. */
   async function selectSnapshot(s: Snapshot) {
     const res = await fetch(`${SOCKET_URL}/api/snapshots/detail/${s.id}`);
     const detail = await res.json();
@@ -78,6 +96,9 @@ export default function VersionHistory({ roomId, currentCode, currentFileName, c
   }
 
   const diff = selected ? diffLines(selected.content, currentCode) : [];
+  // Snapshots are stored per room but shown per file. Matching on name as well
+  // as id keeps history attached across a rename, and to files whose id changed
+  // between sessions.
   const fileSnapshots = snapshots.filter(s => !currentFileId || s.file_id === currentFileId || s.file_name === currentFileName);
 
   return (

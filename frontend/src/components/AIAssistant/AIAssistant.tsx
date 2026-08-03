@@ -29,6 +29,16 @@ const MODES: { key: Mode; label: string; icon: React.ReactElement; hint: string 
   { key: 'generate',label: 'Generate', icon: <Zap size={13} />,       hint: 'Describe what to write, AI generates it' },
 ];
 
+/**
+ * Pull the first fenced code block out of a reply, so it can be offered as
+ * "Apply to editor".
+ *
+ * Returns the full text for display *and* the extracted code separately — the
+ * user still reads the explanation, the button just gets something to insert.
+ * First block only: replies typically lead with the answer, and applying a
+ * concatenation of several blocks would produce something that doesn't compile.
+ * The `[\w]*` after the backticks skips the optional language tag.
+ */
 function extractCodeBlocks(text: string): { display: string; code: string | null } {
   const match = text.match(/```[\w]*\n?([\s\S]*?)```/);
   if (match) {
@@ -44,6 +54,9 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
   const [errorInput, setErrorInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [lastRequestArgs, setLastRequestArgs] = useState<string | null>(null);
+  // Conversation history for multi-turn context, sent up with each request —
+  // the backend keeps no session state. A ref, not state: it's read at send
+  // time and must never trigger a re-render mid-stream.
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -52,6 +65,25 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
 
+  /**
+   * Send a request and stream the reply into the transcript token by token.
+   *
+   * Uses `fetch` + a manual ReadableStream reader rather than `EventSource`,
+   * which is the standard SSE client — EventSource can only issue GETs, and we
+   * need to POST a body (code, selection, history) far too large for a query
+   * string. So we consume the SSE wire format by hand.
+   *
+   * The buffering matters: a chunk boundary can land mid-line, so we split on
+   * '\n' and `pop()` the trailing fragment back into `buffer` to be completed by
+   * the next chunk. Parsing without this drops or corrupts tokens at random
+   * points — a bug that only shows up under real network conditions.
+   *
+   * A placeholder assistant message is pushed up front and then rewritten in
+   * place on every token, which is what produces the typing effect.
+   *
+   * `AbortController` cancels an in-flight request if another is fired, so a
+   * superseded stream can't keep writing into the transcript behind the new one.
+   */
   const sendRequest = useCallback(async (overrideInput?: string) => {
     if (isStreaming) return;
 
@@ -147,6 +179,10 @@ export default function AIAssistant({ code, selection, language, onApply, onClos
     }
   }, [mode, code, selection, language, errorInput, input, isStreaming]);
 
+  /** Retry after a failure: drop the failed exchange from both the transcript
+   *  and the history sent upstream (`slice(0, -2)` removes the user message and
+   *  the error reply), then re-send. Without pruning the history, the model
+   *  would see its own error message as context. */
   function retryLast() {
     if (!lastRequestArgs || isStreaming) return;
     setMessages(prev => prev.slice(0, -2));

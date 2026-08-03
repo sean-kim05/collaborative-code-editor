@@ -1,3 +1,23 @@
+"""CollabCode backend — Flask + Socket.IO server for the collaborative editor.
+
+Responsibilities, in rough order of importance:
+
+1. **Real-time fan-out.** Every editor event (code edits, cursors, selections,
+   typing, chat) arrives over Socket.IO and is re-broadcast to everyone else in
+   the same room. Socket.IO "rooms" do the addressing for us — `to=room_id`.
+2. **State ownership.** The authoritative file tree per room lives in
+   Redis (hot) + PostgreSQL (durable). See `rooms.py` for that layer.
+3. **Side services.** Python code execution (`/api/run`), the Claude-backed AI
+   assistant (`/api/ai`, streamed over SSE), and version snapshots (SQLite).
+
+Concurrency model: eventlet + a single gunicorn worker. That matters — one
+worker means one process holds all the Socket.IO connections, so in-process
+state stays consistent. Scaling past one worker would require a Socket.IO
+message queue (Redis pub/sub) so broadcasts reach clients on other workers.
+
+Conflict resolution: none — this is last-write-wins on whole-file content.
+See `on_code_change` for the tradeoff versus OT/CRDT.
+"""
 from flask import Flask, request, jsonify, Response
 from flask_socketio import SocketIO, join_room, leave_room, emit
 from flask_cors import CORS
@@ -17,6 +37,12 @@ RESPAN_LOG_URL = 'https://api.keywordsai.co/api/request-logs/create'
 
 
 def _send_respan_log(messages, output, model, max_tokens, status_code, mode):
+    """Fire-and-forget observability log for one AI request.
+
+    Called on a daemon thread after the SSE stream closes so it never adds
+    latency to the user-visible response. Every failure path is swallowed on
+    purpose: analytics must never break the feature it observes.
+    """
     try:
         api_key = os.getenv('RESPAN_API_KEY')
         if not api_key:
@@ -69,6 +95,14 @@ DB_PATH = os.path.join(os.path.dirname(__file__), 'snapshots.db')
 # ── Initialization ─────────────────────────────────────────────────
 
 def init_sqlite():
+    """Create the version-history table if it doesn't exist.
+
+    Snapshots live in SQLite rather than PostgreSQL because they're
+    append-only, single-writer, and never queried across rooms — a local file
+    is enough. Caveat for deploys on ephemeral disks (Render's free tier):
+    this file is wiped on restart, so history is best-effort, while room
+    content in PostgreSQL survives.
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.execute('''CREATE TABLE IF NOT EXISTS snapshots (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,6 +118,12 @@ def init_sqlite():
 
 
 def init_postgres():
+    """Wire up PostgreSQL, then warm the Redis cache from it.
+
+    Every step is optional-by-design: without `DATABASE_URL` the app still runs
+    fully, just Redis-only (rooms then die with the server). That keeps local
+    development to a single dependency.
+    """
     if not os.getenv('DATABASE_URL'):
         print('DATABASE_URL not set, skipping PostgreSQL init')
         return
@@ -104,6 +144,16 @@ init_postgres()
 # ── Room expiry cleanup ────────────────────────────────────────────
 
 def _cleanup_expired_rooms():
+    """Delete rooms untouched for 30+ days, then re-arm itself for tomorrow.
+
+    Rooms are anonymous and never explicitly deleted by users, so without a
+    reaper the tables grow forever. `last_active` is bumped on every
+    `store_file_system` write, so "active" means "someone typed in it".
+
+    The `finally` block reschedules unconditionally — if one pass throws, the
+    daily cadence still survives. Safe only because we run a single worker;
+    with N workers this would fire N times a day and race on deletes.
+    """
     try:
         with app.app_context():
             if not rooms_module._USE_PG or rooms_module._Room is None:
@@ -141,6 +191,17 @@ def on_connect():
 
 @socketio.on('disconnect')
 def on_disconnect():
+    """Clean up presence when a socket drops (tab close, network loss, refresh).
+
+    The browser has no chance to send `leave_room` on a hard disconnect, so
+    this is the real cleanup path. We can't trust the client to tell us which
+    room it was in either — hence the `session:<sid>:room` reverse index, which
+    lets us resolve sid -> room from server state alone.
+
+    Two events go out because the client needs both: `user_list` re-renders the
+    avatar stack, `user_left` tells peers to drop that user's cursor, selection,
+    and typing indicator (those are ephemeral and never replayed).
+    """
     try:
         sid = request.sid
         room_id = get_user_room(sid)
@@ -158,6 +219,24 @@ def on_disconnect():
 
 @socketio.on('join_room')
 def on_join_room(data):
+    """Admit a client to a room and hand it the current state. The main entry point.
+
+    Sequence:
+      1. Password gate — private rooms compare against `meta['password']`.
+         (Plaintext compare. Fine for throwaway rooms, but a real product would
+         hash it; that's the honest answer if asked.)
+      2. `join_room(room_id)` subscribes this socket to the Socket.IO room, which
+         is what makes every later `to=room_id` broadcast reach it.
+      3. First joiner becomes `owner`. Note this is a socket id, so it resets on
+         reconnect and isn't persisted to PostgreSQL — ownership is advisory only.
+      4. `get_file_system` lazily creates the room on first join (Redis miss ->
+         PostgreSQL -> fresh `main.js`), so there's no separate "create" step.
+
+    Three emits with deliberately different audiences:
+      - `room_state`  -> just this socket: the full file tree + user list snapshot.
+      - `user_joined` -> everyone else (`include_self=False`): drives the toast.
+      - `user_list`   -> everyone including self: the authoritative roster.
+    """
     try:
         room_id = data.get('room_id')
         username = data.get('username', 'Anonymous')
@@ -193,6 +272,12 @@ def on_join_room(data):
 
 @socketio.on('create_room')
 def on_create_room(data):
+    """Pre-seed room metadata (visibility/password) before anyone joins.
+
+    Optional path — the Home page uses the REST equivalent (`POST
+    /api/room/<id>/meta`) so the settings land before navigation. Rooms
+    themselves are created implicitly on first join.
+    """
     try:
         room_id = data.get('room_id')
         visibility = data.get('visibility', 'public')
@@ -207,6 +292,12 @@ def on_create_room(data):
 
 @socketio.on('leave_room')
 def on_leave_room(data):
+    """Graceful exit — same cleanup as `on_disconnect`, but the socket lives on.
+
+    Fired when a user clicks Leave or the Room component unmounts. Splitting it
+    from disconnect lets a client leave one room and join another without
+    tearing down the connection.
+    """
     try:
         room_id = data.get('room_id')
         sid = request.sid
@@ -222,6 +313,25 @@ def on_leave_room(data):
 
 @socketio.on('code_change')
 def on_code_change(data):
+    """The hot path: persist an edit and fan it out to the rest of the room.
+
+    Design choice — we ship the **whole file content** on every keystroke and
+    apply last-write-wins, rather than operational transforms or a CRDT.
+
+      + Trivially correct for the common case (people editing different files,
+        or different regions with a human-scale typing gap), and it means the
+        server stays stateless about intent — no transform history to keep.
+      - Two people typing in the same file at the same instant will clobber each
+        other: the later message wins wholesale, no character-level merge.
+      - Payload scales with file size, not edit size. Fine at ~KBs (benchmarked
+        p95 < 17ms up to 50 clients), wrong for large documents.
+
+    Yjs/Automerge is the upgrade path: keep this socket layer, swap the payload
+    for CRDT updates and the merge becomes conflict-free.
+
+    `include_self=False` matters — echoing back to the sender would fight the
+    local Monaco model and jump the user's cursor.
+    """
     try:
         room_id = data.get('room_id')
         content = data.get('content', '')
@@ -240,8 +350,17 @@ def on_code_change(data):
         print(f'code_change error: {e}')
 
 
+# Presence relays (cursor / selection / typing / chat).
+#
+# These four are deliberately dumb pass-throughs: validate the room, re-emit,
+# never touch storage. Presence is ephemeral — if you refresh, your cursor is
+# simply gone, and that's the correct behaviour. Skipping the Redis/PG write
+# keeps them off the persistence path entirely, which is what lets cursor
+# updates fire on every mouse move without hammering the datastore.
+
 @socketio.on('cursor_move')
 def on_cursor_move(data):
+    """Relay a caret position. Also powers follow-mode scrolling on the client."""
     try:
         room_id = data.get('room_id')
         emit('cursor_move', data, to=room_id, include_self=False)
@@ -251,6 +370,7 @@ def on_cursor_move(data):
 
 @socketio.on('selection_change')
 def on_selection_change(data):
+    """Relay a highlighted range so peers can render a tinted overlay."""
     try:
         room_id = data.get('room_id')
         emit('selection_change', data, to=room_id, include_self=False)
@@ -260,6 +380,7 @@ def on_selection_change(data):
 
 @socketio.on('typing')
 def on_typing(data):
+    """Relay a typing on/off flag. The 1.5s debounce that produces it is client-side."""
     try:
         room_id = data.get('room_id')
         emit('typing', data, to=room_id, include_self=False)
@@ -269,6 +390,13 @@ def on_typing(data):
 
 @socketio.on('send_message')
 def on_send_message(data):
+    """Broadcast a chat message to the whole room, sender included.
+
+    Unlike the editor events this *does* echo to self — the sender renders the
+    message only once the server has accepted it, so the transcript order is
+    identical for everyone. Messages are not persisted, so chat history is
+    per-session (the `RoomMessage` model exists for this but isn't wired up yet).
+    """
     try:
         room_id = data.get('room_id')
         emit('new_message', data, to=room_id)
@@ -277,9 +405,20 @@ def on_send_message(data):
 
 
 # ── File system events ─────────────────────────────────────────────
+#
+# All four mutations follow the same shape: read the authoritative tree, mutate
+# it, write it back, then broadcast the *entire* tree as `fs_update` — to
+# everyone, sender included. Two reasons for the full-tree broadcast:
+#   1. File ids are server-generated (uuid4), so the client that asked for a new
+#      file can only learn its id by receiving the tree back.
+#   2. It's self-healing: any client that missed an earlier event is silently
+#      resynced, no reconciliation logic needed.
+# The tree is small (metadata + contents for a handful of files), so the
+# simplicity is worth more than the bytes saved by a delta.
 
 @socketio.on('create_file')
 def on_create_file(data):
+    """Add a file to the room and focus it. Language is inferred from the extension."""
     try:
         room_id = data.get('room_id')
         name = data.get('name', 'untitled.js')
@@ -296,6 +435,12 @@ def on_create_file(data):
 
 @socketio.on('delete_file')
 def on_delete_file(data):
+    """Remove a file, refusing to delete the last one.
+
+    The guard is enforced here rather than trusting the client's disabled
+    button — an empty tree would leave the editor with nothing to bind to.
+    If the deleted file was active, focus falls back to the first survivor.
+    """
     try:
         room_id = data.get('room_id')
         file_id = data.get('file_id')
@@ -313,6 +458,8 @@ def on_delete_file(data):
 
 @socketio.on('rename_file')
 def on_rename_file(data):
+    """Rename a file and re-derive its language — renaming `x.js` to `x.py`
+    re-syntax-highlights it for everyone in the room."""
     try:
         room_id = data.get('room_id')
         file_id = data.get('file_id')
@@ -331,6 +478,7 @@ def on_rename_file(data):
 
 @socketio.on('update_file_language')
 def on_update_file_language(data):
+    """Explicit language override from the toolbar picker, beating extension inference."""
     try:
         room_id = data.get('room_id')
         file_id = data.get('file_id')
@@ -348,6 +496,12 @@ def on_update_file_language(data):
 
 @socketio.on('switch_file')
 def on_switch_file(data):
+    """Tell peers which tab this user moved to — presence, not state.
+
+    Deliberately does *not* write `activeFileId` to the room: that field is the
+    room's default landing tab, and letting every click rewrite it would drag
+    everyone else's editor around. Purely a relay, like the cursor events.
+    """
     try:
         room_id = data.get('room_id')
         file_id = data.get('file_id')
@@ -365,6 +519,11 @@ def health():
 
 @app.route('/api/run', methods=['POST'])
 def run_code():
+    """Execute code server-side. Python only — JavaScript never reaches here.
+
+    JS runs in the browser instead (see `handleRun` in Room.tsx): zero round
+    trip, and the blast radius is the user's own tab rather than our server.
+    """
     data = request.get_json() or {}
     language = data.get('language', 'python')
     code = data.get('code', '')
@@ -374,6 +533,19 @@ def run_code():
 
 
 def run_python(code: str):
+    """Write the snippet to a temp file, shell out to `python3`, capture both streams.
+
+    The 5s `timeout=` is the one real guard: it kills infinite loops, which are
+    the failure mode you actually hit in a shared editor. `capture_output` keeps
+    stdout and stderr separate so the client can colour them differently, and
+    the `finally` unlinks the temp file even on timeout.
+
+    Known limitation, worth saying out loud rather than hiding: this is a
+    timeout, not a sandbox. The subprocess inherits the server's filesystem,
+    network, and environment — no seccomp, no user namespace, no memory cap.
+    Production-grade would be a container per run (gVisor/Firecracker) or an
+    off-the-shelf execution service; that was out of scope here.
+    """
     start = time.time()
     try:
         with tempfile.NamedTemporaryFile(suffix='.py', mode='w', delete=False) as f:
@@ -398,6 +570,24 @@ def run_python(code: str):
 
 @app.route('/api/ai', methods=['POST'])
 def ai_assist():
+    """Claude-backed assistant, streamed to the browser over Server-Sent Events.
+
+    Why SSE rather than a plain JSON response: a 2000-token answer takes several
+    seconds to generate, and users read faster than they wait. Streaming token
+    by token makes it feel instant. Why SSE rather than the existing Socket.IO
+    connection: this is a request/response interaction with exactly one
+    recipient — no reason to put it on the broadcast bus.
+
+    The four `mode`s are just prompt templates over the same endpoint. `target`
+    implements the "selection wins over whole file" rule: highlight ten lines
+    and only those ten are sent, which keeps requests cheap and answers focused.
+
+    `history` comes from the client so multi-turn context survives without any
+    server-side session store — the endpoint stays stateless.
+
+    Note the API key is read per-request, not at import: the server boots fine
+    without one and degrades to a clean in-panel error message instead of a 500.
+    """
     data = request.get_json() or {}
     mode = data.get('mode', 'explain')
     code = data.get('code', '')
@@ -432,6 +622,18 @@ def ai_assist():
     messages = history + [{'role': 'user', 'content': user_msg}]
 
     def generate():
+        """Generator body of the SSE stream — each `yield` flushes to the browser.
+
+        Wire format is one JSON object per `data:` line, tagged with a `type`
+        (`text` | `done` | `error`) so the client can tell a content chunk from
+        a terminal signal. Errors are streamed as `type: error` rather than
+        raised: headers are already sent by the time we're inside the generator,
+        so an exception here can no longer become an HTTP status code.
+
+        `X-Accel-Buffering: no` (set on the Response below) is the deployment
+        detail that makes this work behind nginx — without it the proxy buffers
+        the whole stream and the user waits for everything at once.
+        """
         full_output = []
         status_code = 200
         try:
@@ -470,6 +672,12 @@ def ai_assist():
 
 @app.route('/api/snapshots/<room_id>', methods=['GET'])
 def get_snapshots(room_id):
+    """List a room's checkpoints, newest first, capped at 50.
+
+    Content is deliberately excluded from the list query — the sidebar only
+    needs labels and timestamps, and a room's snapshots can add up to megabytes.
+    The body is fetched on demand by `get_snapshot` when one is opened.
+    """
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(
         'SELECT id, file_id, file_name, label, created_at FROM snapshots WHERE room_id=? ORDER BY created_at DESC LIMIT 50',
@@ -481,6 +689,13 @@ def get_snapshots(room_id):
 
 @app.route('/api/snapshots/<room_id>', methods=['POST'])
 def create_snapshot(room_id):
+    """Store a full copy of one file's contents as a restore point.
+
+    Called two ways: automatically every 2 minutes (`label` null -> renders as
+    "Auto checkpoint"), or manually via Ctrl+S with a user-supplied label. Full
+    copies rather than diffs — storage is cheap at this scale and restore stays
+    a single read with no chain to replay.
+    """
     data = request.get_json() or {}
     file_id = data.get('file_id', '')
     file_name = data.get('file_name', 'main.js')
@@ -499,6 +714,7 @@ def create_snapshot(room_id):
 
 @app.route('/api/snapshots/detail/<int:snapshot_id>', methods=['GET'])
 def get_snapshot(snapshot_id):
+    """Fetch one snapshot including its content — used to render the diff view."""
     conn = sqlite3.connect(DB_PATH)
     row = conn.execute('SELECT id, file_id, file_name, content, label, created_at FROM snapshots WHERE id=?', (snapshot_id,)).fetchone()
     conn.close()
@@ -509,6 +725,8 @@ def get_snapshot(snapshot_id):
 
 @app.route('/api/room/<room_id>', methods=['GET'])
 def get_room(room_id):
+    """REST mirror of the `room_state` socket event — handy for debugging a
+    room's server-side state with curl, without opening a WebSocket."""
     fs = get_file_system(room_id)
     users = get_room_users(room_id)
     meta = get_room_meta(room_id)
@@ -523,6 +741,13 @@ def room_exists(room_id):
 
 @app.route('/api/room/<room_id>/meta', methods=['GET', 'POST'])
 def room_meta_route(room_id):
+    """Read or update visibility/password.
+
+    POST is what the Home page's Create Room modal calls: it writes the settings
+    *before* navigating, so a private room is already locked by the time the
+    first socket tries to join. Both fields fall back to their existing values,
+    so a partial POST won't blank the other one.
+    """
     if request.method == 'POST':
         data = request.get_json() or {}
         meta = get_room_meta(room_id)

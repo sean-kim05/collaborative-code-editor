@@ -1,3 +1,14 @@
+/**
+ * Room-wide settings context.
+ *
+ * `RoomProvider` wraps the app in App.tsx, but nothing calls `useRoom()` —
+ * Room.tsx ended up owning all of this state locally instead. That's the right
+ * call for now: the state is used by one subtree, and prop-drilling two levels
+ * is cheaper than a context that re-renders every consumer on each keystroke.
+ *
+ * Kept because it's where this belongs if settings ever need to outlive the
+ * Room component (persisting font size across rooms, a global theme toggle).
+ */
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';

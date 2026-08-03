@@ -5,6 +5,17 @@ import './Home.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
 
+/**
+ * Mint a room id: 16 chars from two base-36 randoms.
+ *
+ * Client-side on purpose — no round trip before navigating. The id *is* the
+ * access control for public rooms ("unguessable URL"), so it needs enough
+ * entropy to not be brute-forced; two calls are concatenated because one
+ * `Math.random().toString(36)` only yields ~8 usable chars.
+ *
+ * Worth flagging honestly: `Math.random()` is not cryptographically secure.
+ * `crypto.randomUUID()` would be the correct primitive for a real product.
+ */
 function generateRoomId(): string {
   return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 }
@@ -18,6 +29,15 @@ export default function Home() {
   const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
 
+  /**
+   * Create a room: POST the settings, then navigate.
+   *
+   * The POST has to land *before* navigation so a private room is already
+   * password-locked by the time the first socket joins — otherwise there's a
+   * window where the room exists as public. The `catch` still navigates: the
+   * room gets created implicitly on join, so a failed meta write degrades to a
+   * public room rather than a dead end.
+   */
   async function createRoom() {
     setCreating(true);
     const roomId = generateRoomId();
@@ -31,6 +51,9 @@ export default function Home() {
     navigate(`/room/${roomId}`);
   }
 
+  /** Join by id or by pasted URL — people share the full link, so accepting
+   *  only a bare id would fail the most common case. Splits on `/room/` and
+   *  strips any query string. */
   function joinRoom() {
     const raw = joinId.trim();
     if (!raw) return;

@@ -3,6 +3,9 @@ import { Upload } from 'lucide-react';
 import type { FileNode, User } from '../../types';
 import './FileExplorer.css';
 
+/** Per-extension file icon. Inline SVG rather than an icon font or sprite
+ *  sheet — no extra network request, and the colours stay controllable. Falls
+ *  through to a generic document glyph for unknown extensions. */
 function FileIcon({ name }: { name: string }) {
   const ext = name.split('.').pop()?.toLowerCase() || '';
 
@@ -120,6 +123,9 @@ function FileIcon({ name }: { name: string }) {
   );
 }
 
+/** Extension -> Monaco language id. Mirrors `get_language_from_name` in
+ *  rooms.py; the client copy exists so uploads and new files can be labelled
+ *  optimistically, but the server's answer is the authoritative one. */
 function getLanguage(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
   const map: Record<string, string> = {
@@ -131,6 +137,13 @@ function getLanguage(name: string): string {
   return map[ext] || 'plaintext';
 }
 
+/**
+ * Deduplicate an uploaded filename: `app.js` -> `app (1).js` -> `app (2).js`.
+ *
+ * Inserts the counter before the extension, not after, so the file keeps its
+ * type and therefore its syntax highlighting. The `while` loop matters for
+ * repeated uploads — a fixed `(1)` would collide on the third one.
+ */
 function getUniqueName(name: string, existingFiles: FileNode[]): string {
   const existing = new Set(existingFiles.map(f => f.name));
   if (!existing.has(name)) return name;
@@ -142,6 +155,16 @@ function getUniqueName(name: string, existingFiles: FileNode[]): string {
   return `${base} (${i})${ext}`;
 }
 
+/**
+ * Heuristic binary check, run on the first 8KB of an uploaded file.
+ *
+ * Needed because `readAsText` will happily decode a PNG into mojibake, which
+ * would then be broadcast to the room as "code". Two signals, mirroring what
+ * `git diff` does: a NUL byte is a hard no (text files never contain one), and
+ * more than 5% non-printable control characters is a soft no.
+ *
+ * Sampling 8KB rather than the whole file keeps it O(1) on the UI thread.
+ */
 function looksLikeBinary(content: string): boolean {
   const sample = content.slice(0, 8000);
   for (let i = 0; i < sample.length; i++) {
@@ -189,6 +212,9 @@ export default function FileExplorer({
     setTimeout(() => newInputRef.current?.focus(), 50);
   }
 
+  /** Reject empty names and characters that are illegal in a path. Returns an
+   *  error string (or '') rather than a boolean so the message can be rendered
+   *  inline under the input. */
   function validateName(name: string): string {
     if (!name.trim()) return 'File name cannot be empty';
     if (/[/\\:*?"<>|]/.test(name)) return 'Invalid characters in file name';
@@ -227,10 +253,20 @@ export default function FileExplorer({
     setContextMenu({ x: e.clientX, y: e.clientY, fileId });
   }
 
+  /** Peers currently viewing a file, for the presence dots in the tree. Self is
+   *  excluded — you know where you are. */
   function getUserOnFile(fileId: string) {
     return users.filter(u => u.session_id !== currentSessionId && u.activeFileId === fileId);
   }
 
+  /**
+   * Validate and read a dropped or picked file, then hand it to Room.tsx.
+   *
+   * Gate order is chosen so the cheap checks run first: size before read (500KB
+   * cap — this content gets broadcast on every subsequent keystroke, so a huge
+   * file would poison the sync path), then binary detection after decoding,
+   * then dedupe the name. Errors surface as toasts, never silently.
+   */
   function processFile(file: File) {
     if (file.size > MAX_FILE_SIZE) {
       onToast('File too large (max 500KB)', 'error');
@@ -263,6 +299,9 @@ export default function FileExplorer({
     if (e.dataTransfer.types.includes('Files')) setIsDragOver(true);
   }
 
+  /** The `contains(relatedTarget)` check is what stops the drop zone from
+   *  flickering: dragging over a child element fires dragleave on the parent,
+   *  so we only clear the highlight when the pointer truly exits the panel. */
   function handleDragLeave(e: React.DragEvent) {
     if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false);
   }

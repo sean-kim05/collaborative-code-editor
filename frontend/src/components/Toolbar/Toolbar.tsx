@@ -40,6 +40,12 @@ interface Props {
   onStopFollow?: () => void;
 }
 
+/**
+ * Top bar: room id, language picker, font size, presence, and the panel
+ * toggles. Stateless apart from two pieces of pure UI state (dropdown open,
+ * copy confirmation) — everything else is lifted to Room.tsx, which is what
+ * lets the same actions be driven by keyboard shortcuts too.
+ */
 export default function Toolbar({
   roomId, language, onLanguageChange, fontSize, onFontSizeChange,
   users, currentSessionId, onShare, onRun, onLeave,
@@ -50,6 +56,8 @@ export default function Toolbar({
   const [langOpen, setLangOpen] = useState(false);
   const [roomCopied, setRoomCopied] = useState(false);
 
+  /** Copy the room id, flipping the icon to a checkmark for 1.5s — a
+   *  self-resetting confirmation that needs no toast. */
   function copyRoomId() {
     navigator.clipboard.writeText(roomId);
     setRoomCopied(true);

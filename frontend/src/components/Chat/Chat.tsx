@@ -11,10 +11,21 @@ interface Props {
   userCount: number;
 }
 
+/**
+ * Room chat. Fully presentational — the socket lives in Room.tsx; this renders
+ * `messages` and calls `onSend`.
+ *
+ * Self-vs-other is decided by username rather than session id, since chat
+ * payloads carry no sid. Two people picking the same name would see each
+ * other's messages styled as their own — acceptable given names are
+ * self-assigned and cosmetic here.
+ */
 export default function Chat({ messages, onSend, onClose, currentUsername, userCount }: Props) {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Keep the newest message in view. Anchored to a sentinel div rather than
+  // computing scrollHeight, which stays correct as bubbles change height.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -26,6 +37,8 @@ export default function Chat({ messages, onSend, onClose, currentUsername, userC
     setInput('');
   }
 
+  /** Enter sends, Shift+Enter is left alone for a newline — the convention
+   *  people expect from every other chat client. */
   function handleKey(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();

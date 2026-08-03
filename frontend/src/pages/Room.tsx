@@ -1,3 +1,28 @@
+/**
+ * Room — the collaborative editing session. The one stateful page in the app.
+ *
+ * Architecture: this component owns the socket and *all* room state, and passes
+ * it down as props. Editor, FileExplorer, Chat, Toolbar and the panels are
+ * presentational — they render props and call callbacks, they don't talk to the
+ * network. One component owning the connection means there's exactly one place
+ * where server events turn into React state, which keeps the data flow
+ * traceable (and avoids several components racing to own the same socket).
+ *
+ * The three patterns worth knowing when reading this file:
+ *
+ *  1. **Refs alongside state for socket callbacks.** Socket handlers are
+ *     registered once (the effect keys on `roomId`) so they close over the
+ *     state from *that* render forever. Anything a handler needs to read live
+ *     is mirrored into a ref — see `fsRef` — or read via a functional setter.
+ *
+ *  2. **Optimistic local, broadcast remote.** Typing applies to local state
+ *     immediately and emits in the same breath; we never wait for a server
+ *     round trip to show your own keystrokes.
+ *
+ *  3. **Server owns the file tree, client owns the view.** File contents and
+ *     structure come from `fs_update`/`room_state`; which tab you're looking at,
+ *     panel sizes, and follow mode are local-only.
+ */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
@@ -20,6 +45,13 @@ import './Room.css';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
 const AUTO_SNAPSHOT_INTERVAL = 2 * 60 * 1000;
 
+/**
+ * Resolve the display name, prompting once and remembering it in localStorage.
+ *
+ * Identity for this app is deliberately this thin — no accounts, no login, so a
+ * shared link is all it takes to collaborate. The random fallback guarantees a
+ * non-empty name even if the user dismisses the prompt.
+ */
 function getUsername(): string {
   const stored = localStorage.getItem('collab_username');
   if (stored) return stored;
@@ -32,9 +64,15 @@ export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
 
+  // The file tree, mirrored to a ref. `fs` drives rendering; `fsRef` is what
+  // long-lived callbacks (the auto-snapshot interval) read so they see current
+  // data instead of a snapshot of the render they were created in.
   const [fs, setFs] = useState<FileSystem>({ files: [], activeFileId: '' });
   const fsRef = useRef<FileSystem>({ files: [], activeFileId: '' });
 
+  // Derived, not stored — one source of truth. Storing the active file
+  // separately would mean keeping two copies of its content in sync on every
+  // keystroke. The `|| files[0]` fallback covers the frame after a delete.
   const activeFile = fs.files.find(f => f.id === fs.activeFileId) || fs.files[0];
   const activeCode = activeFile?.content || '';
   const activeLanguage = activeFile?.language || 'javascript';
@@ -90,7 +128,12 @@ export default function Room() {
   // Keep fsRef in sync for socket callbacks
   useEffect(() => { fsRef.current = fs; }, [fs]);
 
-  // Auto-snapshot every 2 minutes
+  // Auto-snapshot every 2 minutes.
+  //
+  // Keyed on `roomId` alone so the interval isn't torn down and rebuilt on
+  // every keystroke — which is exactly why the callback must read `fsRef`
+  // rather than `fs`: the closure is created once and would otherwise keep
+  // POSTing the empty tree from mount time forever.
   useEffect(() => {
     if (!roomId) return;
     autoSnapshotRef.current = setInterval(async () => {
@@ -106,19 +149,39 @@ export default function Room() {
     return () => { if (autoSnapshotRef.current) clearInterval(autoSnapshotRef.current); };
   }, [roomId]);
 
-  // Room exists check + socket setup
+  /**
+   * Socket lifecycle — connect, subscribe to every server event, tear down.
+   *
+   * Runs once per room (deps: `[roomId]`), which is the whole design: one
+   * connection per session, handlers registered exactly once. The cost is that
+   * every handler below closes over first-render state, so anything that needs
+   * live values uses a ref or a functional state updater. Adding more deps here
+   * would reconnect the socket mid-session, which is worse.
+   *
+   * The cleanup emits `leave_room` *before* `disconnect` so peers get an
+   * immediate, clean departure instead of waiting on the server's disconnect
+   * detection.
+   */
   useEffect(() => {
     if (!roomId) return;
 
-    // 10s loading timeout
+    // Watchdog: Socket.IO retries a dead server indefinitely without ever
+    // firing an error we can show, so the user would sit on a spinner forever.
+    // Every path that proves the connection works clears this.
     loadTimeoutRef.current = setTimeout(() => {
       setLoadError('Server unavailable — could not connect. Is the backend running?');
       setLoading(false);
     }, 10000);
 
+    // WebSocket first, HTTP long-polling as the fallback for networks that
+    // block upgrades (corporate proxies). Socket.IO handles the negotiation.
     const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
+    // Joining is done here rather than at render time because the socket id
+    // doesn't exist until the connection is up — and that id is how every peer
+    // addresses this user's cursor and presence. Re-fires automatically on
+    // reconnect, which re-joins the room for free.
     socket.on('connect', () => {
       if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
       setConnected(true);
@@ -142,6 +205,9 @@ export default function Room() {
       navigate('/');
     });
 
+    // The handshake reply: full tree + roster, sent only to us. This is the
+    // event that ends the loading state — not `connect`, since a live socket
+    // with no room data yet has nothing to render.
     socket.on('room_state', (data: { fs: FileSystem; users: User[] }) => {
       if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
       setFs(data.fs);
@@ -157,6 +223,9 @@ export default function Room() {
       addToast(`${user.username} joined`, 'info');
     });
 
+    // A departure has to clear every trace of that user, or their cursor and
+    // typing indicator hang around as ghosts. Also drops follow mode if we were
+    // following them — otherwise the editor is pinned to a user who's gone.
     socket.on('user_left', (data: { session_id: string }) => {
       setRemoteCursors(prev => prev.filter(c => c.session_id !== data.session_id));
       setRemoteSelections(prev => prev.filter(s => s.session_id !== data.session_id));
@@ -164,6 +233,12 @@ export default function Room() {
       setFollowingUserId(prev => prev === data.session_id ? null : prev);
     });
 
+    // A peer's edit. Patched by `file_id`, not into the active file — edits to
+    // files you aren't looking at still land, so switching tabs shows current
+    // content rather than whatever it held when you last opened it.
+    //
+    // The functional `setFs(prev => ...)` is load-bearing: this handler was
+    // created on mount, so a direct `setFs({...fs})` would write a stale tree.
     socket.on('code_change', (data: { file_id: string; content: string }) => {
       setFs(prev => {
         const files = prev.files.map(f => f.id === data.file_id ? { ...f, content: data.content } : f);
@@ -171,6 +246,14 @@ export default function Room() {
       });
     });
 
+    // Structural change (create/delete/rename). The server sends the whole tree
+    // and we replace wholesale — no merging, the server is authoritative here.
+    //
+    // This also completes the two-phase file upload. Uploads can't be done in
+    // one shot because file ids are minted server-side: we ask for an empty
+    // file, wait for the tree to come back, find our file by name, then push its
+    // contents through the normal `code_change` path. `pendingUploadRef` is the
+    // handoff between the two phases.
     socket.on('fs_update', (data: { fs: FileSystem }) => {
       setFs(data.fs);
       // After a file upload: find the newly created file by name, then push its content
@@ -195,7 +278,11 @@ export default function Room() {
         const filtered = prev.filter(c => c.session_id !== data.session_id);
         return [...filtered, { session_id: data.session_id, username: data.username, color: data.color, position: data.cursor_position }];
       });
-      // Follow mode: scroll editor to followed user's cursor
+      // Follow mode (Figma-style): if this cursor belongs to the user we're
+      // following, scroll to it. Reading `followingUserId` through a functional
+      // setter is a deliberate trick — it's the only way to see the *current*
+      // value from inside a handler registered on mount. Nothing is updated;
+      // `prevFollowing` is returned unchanged, we just needed to read it.
       setFollowingUserId(prevFollowing => {
         if (prevFollowing === data.session_id && editorRef.current) {
           editorRef.current.revealLine(data.cursor_position.lineNumber);
@@ -204,6 +291,8 @@ export default function Room() {
       });
     });
 
+    // One selection per user, replaced on each update. A collapsed range means
+    // "deselected" — we drop it instead of rendering a zero-width highlight.
     socket.on('selection_change', (data: { session_id: string; username: string; color: string; startLine: number; startColumn: number; endLine: number; endColumn: number }) => {
       setRemoteSelections(prev => {
         const filtered = prev.filter(s => s.session_id !== data.session_id);
@@ -221,8 +310,15 @@ export default function Room() {
     });
 
     socket.on('new_message', (msg: ChatMessage) => {
+      // Messages aren't persisted server-side and carry no id, so we mint one
+      // locally for React's key.
       const withId = { ...msg, id: Math.random().toString(36).slice(2) };
       setMessages(prev => [...prev, withId]);
+      // NOTE: `chatOpen` here is the mount-time value (false) — this handler
+      // closes over first-render state like the others, but unlike them it
+      // reads a plain variable instead of a ref or functional setter. So the
+      // badge also counts messages that arrive while the chat is already open.
+      // Minor cosmetic bug; the fix is a `chatOpenRef` mirror.
       if (!chatOpen) setUnreadCount(n => n + 1);
     });
 
@@ -233,7 +329,17 @@ export default function Room() {
     };
   }, [roomId]);
 
-  // Keyboard shortcuts
+  /**
+   * Global keyboard shortcuts (Ctrl/Cmd + Enter/I/S//, and Escape).
+   *
+   * Bound to `window` rather than the editor so they work whichever panel has
+   * focus. `preventDefault` is what stops Ctrl+S from opening the browser's
+   * save dialog and Ctrl+/ from hitting a browser default.
+   *
+   * Deps are `[activeCode, activeFile]` because `handleRun` and
+   * `saveManualSnapshot` close over them — without the rebind, Ctrl+S would
+   * checkpoint whatever the file contained when the room loaded.
+   */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); setChatOpen(o => !o); }
@@ -246,6 +352,19 @@ export default function Room() {
     return () => window.removeEventListener('keydown', handler);
   }, [activeCode, activeFile]);
 
+  /**
+   * Every keystroke in the editor. The hottest path in the app.
+   *
+   * Local state updates and the emit fire together — no debounce on the edit
+   * itself. That's the deliberate call behind the sub-20ms sync number: waiting
+   * even 50ms to batch would be visible as lag in someone else's editor, and
+   * the payload is small enough that per-keystroke messages are affordable.
+   *
+   * The typing indicator *is* debounced, and inverted: "typing" is sent
+   * immediately on the first keystroke, and a 1.5s timer (reset on each
+   * subsequent key) sends the "stopped" signal. So one event per typing burst
+   * rather than one per character.
+   */
   function handleCodeChange(newCode: string) {
     const fileId = fs.activeFileId;
     setFs(prev => ({
@@ -261,6 +380,9 @@ export default function Room() {
     }, 1500);
   }
 
+  /** Caret moved: update the status bar and tell peers, so they can draw our
+   *  cursor (and follow it, if they're following us). Unthrottled — cursor
+   *  events are tiny and the server does nothing but relay them. */
   function handleCursorChange(position: { lineNumber: number; column: number }) {
     setCursorPos({ line: position.lineNumber, column: position.column });
     socketRef.current?.emit('cursor_move', { room_id: roomId, cursor_position: position, username: usernameRef.current, color: colorRef.current, session_id: sessionIdRef.current });
@@ -270,6 +392,9 @@ export default function Room() {
     setCurrentSelection(sel);
   }
 
+  /** Change tabs. Applied locally at once (the tree is already loaded, so there
+   *  is nothing to fetch) and announced to peers as presence only — it does not
+   *  move anyone else's editor. */
   function handleSwitchFile(fileId: string) {
     setFs(prev => ({ ...prev, activeFileId: fileId }));
     const file = fs.files.find(f => f.id === fileId);
@@ -277,6 +402,10 @@ export default function Room() {
     socketRef.current?.emit('switch_file', { room_id: roomId, file_id: fileId, session_id: sessionIdRef.current });
   }
 
+  // Structural mutations are fire-and-forget: no local state change, the UI
+  // updates when the server's `fs_update` lands. Unlike text edits these are
+  // rare and need a server-assigned id, so the round trip isn't worth
+  // optimistically faking.
   function handleCreateFile(name: string, lang: string) {
     socketRef.current?.emit('create_file', { room_id: roomId, name, language: lang });
   }
@@ -289,6 +418,8 @@ export default function Room() {
     socketRef.current?.emit('rename_file', { room_id: roomId, file_id: fileId, name });
   }
 
+  /** Phase 1 of the upload: stash the payload, then request an empty file.
+   *  Phase 2 runs in the `fs_update` handler once the server hands back an id. */
   function handleUploadFile(name: string, lang: string, content: string) {
     pendingUploadRef.current = { name, content };
     socketRef.current?.emit('create_file', { room_id: roomId, name, language: lang });
@@ -298,6 +429,8 @@ export default function Room() {
     socketRef.current?.emit('send_message', { room_id: roomId, username: usernameRef.current, color: colorRef.current, message, timestamp: new Date().toISOString() });
   }
 
+  /** Ctrl+S — checkpoint the active file. Labelled, so it's distinguishable
+   *  from the 2-minute automatic ones in the history list. */
   async function saveManualSnapshot() {
     if (!activeFile) return;
     await fetch(`${SOCKET_URL}/api/snapshots/${roomId}`, {
@@ -308,6 +441,25 @@ export default function Room() {
     addToast('Checkpoint saved', 'success');
   }
 
+  /**
+   * Run the active file. Two completely different execution paths.
+   *
+   * **JavaScript — in the browser.** `new Function(code)` compiles and runs the
+   * snippet with zero latency and zero server load, and `console.log`/`error`
+   * are monkey-patched around the call so output can be captured and shown in
+   * the panel. Honest caveats: this is *not* a sandbox — the code shares the
+   * page's globals and DOM — and it runs on the main thread, so an infinite
+   * loop freezes the tab (the 5s race only bounds returned promises, it can't
+   * interrupt synchronous code). A Web Worker with a terminate-on-timeout would
+   * fix both, at the cost of losing direct console capture.
+   *
+   * **Python — on the server.** POSTs to `/api/run`, which shells out with a 5s
+   * timeout. See `run_python` for its own isolation caveats.
+   *
+   * The restore of `console.log` is intentionally outside the try/catch's
+   * failure path — it runs whether or not the snippet threw, so a throwing
+   * snippet can't leave the app's console permanently hijacked.
+   */
   const handleRun = useCallback(async () => {
     if (language !== 'javascript' && language !== 'python') {
       addToast('Run supports JavaScript and Python only', 'warning');
@@ -343,6 +495,18 @@ export default function Room() {
     setRunning(false);
   }, [activeCode, language]);
 
+  /**
+   * Insert an AI suggestion into the editor.
+   *
+   * Goes through the editor's imperative handle rather than setting state, so
+   * Monaco applies it as a real edit: undoable with Ctrl+Z, and scoped to the
+   * selection when there is one (replace just the highlighted block) instead of
+   * always clobbering the whole file. Falls back to a state write only if the
+   * editor hasn't mounted.
+   *
+   * No explicit emit needed — Monaco's change event fires `handleCodeChange`,
+   * which broadcasts it like any other edit.
+   */
   function handleApplyAI(code: string) {
     const fileId = fs.activeFileId;
     if (editorRef.current) {
@@ -356,6 +520,9 @@ export default function Room() {
     addToast('AI suggestion applied', 'success');
   }
 
+  /** Roll the active file back to a checkpoint. Explicitly emits, because this
+   *  writes state directly rather than going through the editor — a restore is
+   *  a room-wide action, so everyone should see the rollback. */
   function handleRestoreSnapshot(content: string) {
     const fileId = fs.activeFileId;
     setFs(prev => ({
@@ -366,6 +533,9 @@ export default function Room() {
     addToast('Snapshot restored', 'success');
   }
 
+  /** Drag-to-resize the output panel. Listeners go on `window`, not the handle,
+   *  so the drag survives the pointer moving faster than React re-renders and
+   *  leaving the 4px grab strip. Both are removed on mouseup. */
   function startOutputDrag(e: React.MouseEvent) {
     outputDragRef.current = { startY: e.clientY, startH: outputHeight };
     const onMove = (ev: MouseEvent) => {

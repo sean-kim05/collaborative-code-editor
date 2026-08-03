@@ -8,6 +8,14 @@ interface Props {
   onCopied: () => void;
 }
 
+/**
+ * Share dialog. The invite flow in its entirety: there are no invitations to
+ * send or permissions to grant, the URL *is* the invite.
+ *
+ * The link is built from `window.location.origin` rather than a configured base
+ * URL, so it's correct in local dev, on a preview deploy, and in production
+ * without any env var.
+ */
 export default function ShareModal({ roomId, onClose, onCopied }: Props) {
   const url = `${window.location.origin}/room/${roomId}`;
   const [copied, setCopied] = useState(false);
@@ -20,6 +28,8 @@ export default function ShareModal({ roomId, onClose, onCopied }: Props) {
   }
 
   return (
+    // The target === currentTarget check closes on backdrop clicks only —
+    // without it, any click inside the dialog would bubble up and dismiss it.
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">

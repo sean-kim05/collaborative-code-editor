@@ -25,6 +25,8 @@ const ICONS = {
 export function ToastContainer({ toasts, onDismiss }: ToastProps) {
   return (
     <div className="toast-container">
+      {/* Only the 3 most recent are rendered — a burst of joins in a busy room
+          would otherwise stack toasts up the whole viewport. */}
       {toasts.slice(-3).map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}
@@ -35,6 +37,14 @@ export function ToastContainer({ toasts, onDismiss }: ToastProps) {
 function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
   const [visible, setVisible] = useState(false);
 
+  /**
+   * Two-stage lifecycle, because CSS can't transition an element that was just
+   * mounted in its final state:
+   *   mount -> rAF sets `visible` (transition in) -> 3s -> clear `visible`
+   *   (transition out) -> 300ms -> actually unmount.
+   * The `requestAnimationFrame` is what guarantees the browser paints the
+   * hidden state first, so there's something to animate from.
+   */
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
     const t = setTimeout(() => {
@@ -53,6 +63,14 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
   );
 }
 
+/**
+ * Toast queue. Owned by Room.tsx and passed to `ToastContainer` — deliberately
+ * a hook rather than a context provider, since exactly one component needs it.
+ *
+ * `addToast` is wrapped in `useCallback` with no deps so its identity is stable:
+ * it's captured by the socket handlers, which are registered once on mount.
+ * An unstable reference there would mean handlers calling a dead closure.
+ */
 export function useToasts() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 

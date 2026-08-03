@@ -8,6 +8,14 @@ interface Props {
   column?: number;
 }
 
+/**
+ * VS Code-style footer: connection state, caret position, active language.
+ *
+ * The connection indicator is the important one — in a collaborative editor the
+ * user needs to know at a glance whether what they're typing is reaching anyone
+ * else. Purely presentational; `connected` is driven by the socket's
+ * connect/disconnect events in Room.tsx.
+ */
 export default function StatusBar({ language, connected, line = 1, column = 1 }: Props) {
   return (
     <div className="status-bar">

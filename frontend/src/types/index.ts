@@ -1,3 +1,15 @@
+/**
+ * Shared types — the contract between the Flask backend and the React client.
+ *
+ * Note the mixed casing: `session_id`, `file_id`, `created_at` are snake_case
+ * because they cross the wire from Python and are used verbatim rather than
+ * being remapped, while client-only fields (`activeFileId`, `unsaved`) follow
+ * JS convention. The casing tells you which side of the boundary a field
+ * came from.
+ */
+
+/** A connected participant. `session_id` is the Socket.IO sid — the identity
+ *  for everything real-time, and it changes on every reconnect. */
 export interface User {
   session_id: string;
   username: string;
@@ -37,6 +49,8 @@ export interface ChatMessage {
   isSelf?: boolean;
 }
 
+/** A file. `id` is the server-minted uuid every sync message addresses;
+ *  `unsaved` is a local-only dirty flag driving the tab dot. */
 export interface FileNode {
   id: string;
   name: string;
@@ -50,6 +64,8 @@ export interface FileSystem {
   activeFileId: string;
 }
 
+/** Snapshot list entry — metadata only. `SnapshotDetail` adds the body, which
+ *  is fetched separately so the history list stays cheap. */
 export interface Snapshot {
   id: number;
   file_id: string;
@@ -74,6 +90,7 @@ export interface TypingUser {
   color: string;
 }
 
+/** Shape backing RoomContext. Unused while Room.tsx owns this state locally. */
 export interface RoomState {
   roomId: string;
   username: string;
