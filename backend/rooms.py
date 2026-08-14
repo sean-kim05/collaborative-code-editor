@@ -23,9 +23,13 @@ Key namespace:
     room:<room>:users      -> presence roster, as JSON
     session:<sid>:room     -> reverse index, so a disconnect can find its room
 """
+import hmac
 import json
 import uuid
 import os
+
+# Ships with Flask — no new dependency.
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Probe Redis once at import with a ping — `from_url` alone is lazy and would
 # not fail until the first real command. Falling back here means the rest of the
@@ -303,6 +307,50 @@ def load_rooms_from_db():
         print(f'Loaded {loaded} rooms from PostgreSQL into Redis')
     except Exception as e:
         print(f'Failed to load rooms from DB: {e}')
+
+
+# ── Room passwords ─────────────────────────────────────────────────
+# `meta['password']` holds a hash, never the raw string. Three helpers own that
+# invariant so no caller has to think about it — and, critically, so no caller
+# can hand the stored value to a client. Use `public_room_meta` for anything
+# that leaves the server.
+
+def hash_room_password(raw):
+    """Hash a room password for storage. None/empty means "no password"."""
+    if not raw:
+        return None
+    return generate_password_hash(raw)
+
+
+def verify_room_password(meta: dict, supplied) -> bool:
+    """Check a supplied password against a room's stored one.
+
+    Rooms created before passwords were hashed hold a raw string; those are
+    compared with a constant-time equality so the transition doesn't lock
+    anyone out. They upgrade to a hash the next time the settings are written.
+    """
+    stored = (meta or {}).get('password')
+    if not stored:
+        return True  # open room — nothing to check
+    supplied = supplied or ''
+    if stored.startswith(('pbkdf2:', 'scrypt:', 'argon2')):
+        return check_password_hash(stored, supplied)
+    return hmac.compare_digest(str(stored), str(supplied))
+
+
+def public_room_meta(meta: dict) -> dict:
+    """The client-safe view of a room's settings.
+
+    Whether a password exists is legitimately useful to the UI (it decides
+    whether to prompt); the password itself — hash or otherwise — never leaves
+    the server. Every emit and every HTTP response goes through this.
+    """
+    meta = meta or {}
+    return {
+        'visibility': meta.get('visibility', 'public'),
+        'has_password': bool(meta.get('password')),
+        'owner': meta.get('owner'),
+    }
 
 
 # ── Room metadata ──────────────────────────────────────────────────

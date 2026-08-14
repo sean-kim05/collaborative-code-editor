@@ -78,6 +78,7 @@ from rooms import (
     get_user_room, set_user_room, clear_user_room,
     get_file_system, store_file_system, make_file,
     get_room_meta, set_room_meta, room_exists_in_db,
+    hash_room_password, verify_room_password, public_room_meta,
     clear_room_redis_keys, get_language_from_name,
     load_rooms_from_db,
 )
@@ -225,9 +226,10 @@ def on_join_room(data):
     """Admit a client to a room and hand it the current state. The main entry point.
 
     Sequence:
-      1. Password gate — private rooms compare against `meta['password']`.
-         (Plaintext compare. Fine for throwaway rooms, but a real product would
-         hash it; that's the honest answer if asked.)
+      1. Password gate — `verify_room_password` checks against the stored hash.
+         The room's own settings are echoed back through `public_room_meta`,
+         which strips the password: the client is told *whether* one is set,
+         never what it is.
       2. `join_room(room_id)` subscribes this socket to the Socket.IO room, which
          is what makes every later `to=room_id` broadcast reach it.
       3. First joiner becomes `owner`. Note this is a socket id, so it resets on
@@ -248,7 +250,7 @@ def on_join_room(data):
         sid = request.sid
 
         meta = get_room_meta(room_id)
-        if meta.get('password') and meta['password'] != password:
+        if not verify_room_password(meta, password):
             emit('join_error', {'message': 'Incorrect password'})
             return
 
@@ -265,12 +267,44 @@ def on_join_room(data):
         users = get_room_users(room_id)
         fs = get_file_system(room_id)
 
-        emit('room_state', {'fs': fs, 'users': users, 'meta': meta})
+        emit('room_state', {'fs': fs, 'users': users, 'meta': public_room_meta(meta)})
         emit('user_joined', user_data, to=room_id, include_self=False)
         emit('user_list', {'users': users}, to=room_id)
     except Exception as e:
         print(f'join_room error: {e}')
         emit('join_error', {'message': 'Failed to join room'})
+
+
+def _apply_room_settings(room_id, visibility, password, current_password, owner=None):
+    """Create or update a room's settings. Returns (ok, error).
+
+    The authorization rule: settings are free to claim while the room has no
+    password — that is how creation works, since rooms otherwise come into
+    existence implicitly on first join. Once a password is set, changing
+    anything requires presenting it. Without that check any caller who knew a
+    room id could rewrite the password and lock out everyone currently in it,
+    or flip a private room to public.
+
+    Known limit, inherent to having no user accounts: a room with no password
+    can still have one added by a stranger who knows its id. `owner` is a live
+    socket id that resets on reconnect, so it cannot carry this. Closing that
+    gap needs real accounts, not a bigger check here.
+    """
+    existing = get_room_meta(room_id)
+    if existing.get('password') and not verify_room_password(existing, current_password):
+        return False, 'Current password required to change room settings'
+
+    meta = {
+        'visibility': visibility if visibility is not None else existing.get('visibility', 'public'),
+        # Carry the stored hash forward untouched unless a new password is given.
+        'password': existing.get('password'),
+        'owner': existing.get('owner') or owner,
+    }
+    if password is not None:
+        meta['password'] = hash_room_password(password)
+
+    set_room_meta(room_id, meta)
+    return True, None
 
 
 @socketio.on('create_room')
@@ -283,12 +317,17 @@ def on_create_room(data):
     """
     try:
         room_id = data.get('room_id')
-        visibility = data.get('visibility', 'public')
-        password = data.get('password', None)
-        sid = request.sid
-        meta = {'visibility': visibility, 'password': password, 'owner': sid}
-        set_room_meta(room_id, meta)
-        emit('room_created', {'room_id': room_id, 'meta': meta})
+        ok, error = _apply_room_settings(
+            room_id,
+            data.get('visibility', 'public'),
+            data.get('password', None),
+            data.get('current_password', ''),
+            owner=request.sid,
+        )
+        if not ok:
+            emit('room_error', {'message': error})
+            return
+        emit('room_created', {'room_id': room_id, 'meta': public_room_meta(get_room_meta(room_id))})
     except Exception as e:
         print(f'create_room error: {e}')
 
@@ -823,15 +862,23 @@ def room_meta_route(room_id):
     *before* navigating, so a private room is already locked by the time the
     first socket tries to join. Both fields fall back to their existing values,
     so a partial POST won't blank the other one.
+
+    GET returns the client-safe view only. It previously returned the stored
+    meta verbatim, which included the room password — one unauthenticated GET
+    was enough to walk into any private room.
     """
     if request.method == 'POST':
         data = request.get_json() or {}
-        meta = get_room_meta(room_id)
-        meta['visibility'] = data.get('visibility', meta.get('visibility', 'public'))
-        meta['password'] = data.get('password', meta.get('password'))
-        set_room_meta(room_id, meta)
+        ok, error = _apply_room_settings(
+            room_id,
+            data.get('visibility'),
+            data.get('password'),
+            data.get('current_password', ''),
+        )
+        if not ok:
+            return jsonify({'ok': False, 'error': error}), 403
         return jsonify({'ok': True})
-    return jsonify(get_room_meta(room_id))
+    return jsonify(public_room_meta(get_room_meta(room_id)))
 
 
 if __name__ == '__main__':
