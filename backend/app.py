@@ -90,8 +90,19 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', '')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-CORS(app, origins='*')
-socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
+# Allowed browser origins. Wildcard CORS on this server meant any page on the
+# internet could call /api/ai (Claude, billed to us) and /api/run. Override with
+# a comma-separated ALLOWED_ORIGINS in the environment when the frontend moves.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.getenv(
+        'ALLOWED_ORIGINS',
+        'https://collaborative-code-editor-livid.vercel.app,'
+        'http://localhost:5173,http://127.0.0.1:5173',
+    ).split(',') if o.strip()
+]
+
+CORS(app, origins=ALLOWED_ORIGINS)
+socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode='eventlet')
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'snapshots.db')
 
@@ -569,6 +580,46 @@ EXEC_TIMEOUT_SECONDS = 5
 EXEC_MEMORY_BYTES = 256 * 1024 * 1024
 EXEC_MAX_OUTPUT_BYTES = 64 * 1024
 
+# Caps on what one /api/ai call can cost us.
+MAX_HISTORY_TURNS = 20
+MAX_INPUT_CHARS = 50_000
+
+# ── Rate limiting ──────────────────────────────────────────────────
+# In-process and per-IP. That is sufficient *here* specifically because this
+# server runs a single gunicorn worker (see the module docstring) — one process
+# holds all state. Adding a second worker would need Redis-backed counters.
+_rate_buckets = {}
+_rate_lock = threading.Lock()
+
+
+def _client_ip():
+    """Real client IP. Behind Render's proxy request.remote_addr is the proxy,
+    and the LAST X-Forwarded-For entry is the one Render itself appended — the
+    earlier entries are client-supplied and trivially spoofed."""
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[-1].strip()
+    return request.remote_addr or 'unknown'
+
+
+def rate_limit(bucket: str, limit: int, window_seconds: int):
+    """Allow `limit` requests per `window_seconds` per IP. Returns True if OK."""
+    key = (bucket, _client_ip())
+    now = time.time()
+    with _rate_lock:
+        hits = [t for t in _rate_buckets.get(key, []) if now - t < window_seconds]
+        if len(hits) >= limit:
+            _rate_buckets[key] = hits
+            return False
+        hits.append(now)
+        _rate_buckets[key] = hits
+        # Opportunistic sweep so idle keys don't accumulate forever.
+        if len(_rate_buckets) > 4096:
+            for k, v in list(_rate_buckets.items()):
+                if not [t for t in v if now - t < window_seconds]:
+                    _rate_buckets.pop(k, None)
+    return True
+
 
 @app.route('/api/run', methods=['POST'])
 def run_code():
@@ -586,11 +637,16 @@ def run_code():
             'elapsed_ms': 0,
         }), 503
 
+    if not rate_limit('run', limit=10, window_seconds=60):
+        return jsonify({'stdout': '', 'stderr': 'Rate limit exceeded.', 'elapsed_ms': 0}), 429
+
     data = request.get_json() or {}
     language = data.get('language', 'python')
     code = data.get('code', '')
     if not isinstance(code, str):
         return jsonify({'error': 'code must be a string'}), 400
+    if len(code) > MAX_INPUT_CHARS:
+        return jsonify({'error': f'code exceeds {MAX_INPUT_CHARS} characters'}), 413
     if language == 'python':
         return run_python(code)
     return jsonify({'error': 'Unsupported language'}), 400
@@ -703,6 +759,9 @@ def ai_assist():
     Note the API key is read per-request, not at import: the server boots fine
     without one and degrades to a clean in-panel error message instead of a 500.
     """
+    if not rate_limit('ai', limit=20, window_seconds=60):
+        return jsonify({'error': 'Rate limit exceeded. Please wait a moment.'}), 429
+
     data = request.get_json() or {}
     mode = data.get('mode', 'explain')
     code = data.get('code', '')
@@ -711,6 +770,20 @@ def ai_assist():
     error_msg = data.get('error', '')
     prompt = data.get('prompt', '')
     history = data.get('history', [])
+
+    # `history` is client-supplied, which is what keeps this endpoint stateless.
+    # Cap it: unbounded, a caller could pass an arbitrarily long conversation and
+    # turn one request into an arbitrarily large bill on our key.
+    if not isinstance(history, list):
+        history = []
+    history = [
+        h for h in history[-MAX_HISTORY_TURNS:]
+        if isinstance(h, dict) and h.get('role') in ('user', 'assistant')
+        and isinstance(h.get('content'), str)
+    ]
+    for field_name, value in (('code', code), ('selection', selection), ('prompt', prompt)):
+        if isinstance(value, str) and len(value) > MAX_INPUT_CHARS:
+            return jsonify({'error': f'{field_name} exceeds {MAX_INPUT_CHARS} characters'}), 413
 
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
