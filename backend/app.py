@@ -23,7 +23,10 @@ from flask_socketio import SocketIO, join_room, leave_room, emit
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+import resource
+import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import json
@@ -517,55 +520,128 @@ def on_switch_file(data):
 def health():
     return {'status': 'ok'}
 
+# Server-side execution runs untrusted code, so it is opt-in rather than
+# opt-out: an operator has to set ENABLE_CODE_EXECUTION=1 deliberately, and
+# should only do so where the process itself is disposable (a per-run container).
+# It is off on the public deployment.
+CODE_EXECUTION_ENABLED = os.getenv('ENABLE_CODE_EXECUTION', '').lower() in ('1', 'true', 'yes')
+
+EXEC_TIMEOUT_SECONDS = 5
+EXEC_MEMORY_BYTES = 256 * 1024 * 1024
+EXEC_MAX_OUTPUT_BYTES = 64 * 1024
+
+
 @app.route('/api/run', methods=['POST'])
 def run_code():
     """Execute code server-side. Python only — JavaScript never reaches here.
 
     JS runs in the browser instead (see `handleRun` in Room.tsx): zero round
     trip, and the blast radius is the user's own tab rather than our server.
+
+    Disabled unless ENABLE_CODE_EXECUTION is set — see `run_python` for why.
     """
+    if not CODE_EXECUTION_ENABLED:
+        return jsonify({
+            'stdout': '',
+            'stderr': 'Server-side Python execution is disabled on this instance.',
+            'elapsed_ms': 0,
+        }), 503
+
     data = request.get_json() or {}
     language = data.get('language', 'python')
     code = data.get('code', '')
+    if not isinstance(code, str):
+        return jsonify({'error': 'code must be a string'}), 400
     if language == 'python':
         return run_python(code)
     return jsonify({'error': 'Unsupported language'}), 400
 
 
+def _apply_exec_limits():
+    """Run in the forked child between fork and exec, so these limits bind the
+    interpreter we are about to start and nothing else.
+
+    Each limit is applied independently and best-effort, because support varies
+    by platform: macOS rejects RLIMIT_AS outright, and RLIMIT_NPROC counts
+    processes per real UID so it can fail on a busy host. An exception raised
+    here aborts the whole spawn, so one unsupported limit must not cost us the
+    others — Linux (where this deploys) gets all of them, macOS gets the rest.
+
+    None of these are the primary control. That is `env={}` in the caller.
+    """
+    for limit_name, value in (
+        ('RLIMIT_CPU', (EXEC_TIMEOUT_SECONDS, EXEC_TIMEOUT_SECONDS)),
+        ('RLIMIT_AS', (EXEC_MEMORY_BYTES, EXEC_MEMORY_BYTES)),
+        ('RLIMIT_FSIZE', (1024 * 1024, 1024 * 1024)),
+        ('RLIMIT_CORE', (0, 0)),
+        ('RLIMIT_NPROC', (256, 256)),
+    ):
+        limit = getattr(resource, limit_name, None)
+        if limit is None:
+            continue
+        try:
+            resource.setrlimit(limit, value)
+        except (ValueError, OSError):
+            continue
+
+
 def run_python(code: str):
-    """Write the snippet to a temp file, shell out to `python3`, capture both streams.
+    """Write the snippet to a temp file, run it under a constrained interpreter,
+    capture both streams.
 
-    The 5s `timeout=` is the one real guard: it kills infinite loops, which are
-    the failure mode you actually hit in a shared editor. `capture_output` keeps
-    stdout and stderr separate so the client can colour them differently, and
-    the `finally` unlinks the temp file even on timeout.
+    This is defence in depth, not a sandbox, and the distinction matters:
 
-    Known limitation, worth saying out loud rather than hiding: this is a
-    timeout, not a sandbox. The subprocess inherits the server's filesystem,
-    network, and environment — no seccomp, no user namespace, no memory cap.
-    Production-grade would be a container per run (gVisor/Firecracker) or an
-    off-the-shelf execution service; that was out of scope here.
+    * `env={}` — the child gets no environment at all, so ANTHROPIC_API_KEY,
+      DATABASE_URL, SECRET_KEY and RESPAN_API_KEY are not readable from it.
+      This is the single most valuable guard here.
+    * `-I` isolates the interpreter (ignores PYTHON* vars and user site-packages)
+      and `-S` skips site entirely, so only the standard library is importable.
+      Drop `-S` if you want third-party imports to work.
+    * `cwd` is a fresh empty directory that is removed afterwards, so relative
+      paths cannot reach the application's own files.
+    * `_apply_exec_limits` caps CPU, address space, and file writes; the
+      `timeout=` still handles the wall-clock case (e.g. `time.sleep`).
+
+    What this still does NOT stop: reading world-readable files by absolute path
+    and making outbound network connections — `urllib` is stdlib. Treat the
+    executing process as hostile. A real boundary is a per-run container
+    (gVisor/Firecracker) or a hosted service like Piston; until this runs inside
+    one, leave ENABLE_CODE_EXECUTION unset in any environment you care about.
     """
     start = time.time()
+    workdir = tempfile.mkdtemp(prefix='collabcode-run-')
+    fname = os.path.join(workdir, 'main.py')
     try:
-        with tempfile.NamedTemporaryFile(suffix='.py', mode='w', delete=False) as f:
+        with open(fname, 'w', encoding='utf-8') as f:
             f.write(code)
-            fname = f.name
         result = subprocess.run(
-            ['python3', fname],
-            capture_output=True, text=True, timeout=5
+            [sys.executable, '-I', '-S', fname],
+            capture_output=True,
+            text=True,
+            timeout=EXEC_TIMEOUT_SECONDS,
+            cwd=workdir,
+            env={},
+            stdin=subprocess.DEVNULL,
+            preexec_fn=_apply_exec_limits,
         )
         elapsed = round((time.time() - start) * 1000)
-        return jsonify({'stdout': result.stdout, 'stderr': result.stderr, 'elapsed_ms': elapsed})
+        return jsonify({
+            'stdout': result.stdout[:EXEC_MAX_OUTPUT_BYTES],
+            'stderr': result.stderr[:EXEC_MAX_OUTPUT_BYTES],
+            'elapsed_ms': elapsed,
+        })
     except subprocess.TimeoutExpired:
-        return jsonify({'stdout': '', 'stderr': 'Execution timed out (5s limit)', 'elapsed_ms': 5000})
-    except Exception as e:
-        return jsonify({'stdout': '', 'stderr': str(e), 'elapsed_ms': 0})
+        return jsonify({
+            'stdout': '',
+            'stderr': f'Execution timed out ({EXEC_TIMEOUT_SECONDS}s limit)',
+            'elapsed_ms': EXEC_TIMEOUT_SECONDS * 1000,
+        })
+    except Exception:
+        # Never surface the raw exception: it leaks interpreter and filesystem paths.
+        app.logger.exception('code execution failed')
+        return jsonify({'stdout': '', 'stderr': 'Execution failed.', 'elapsed_ms': 0})
     finally:
-        try:
-            os.unlink(fname)
-        except Exception:
-            pass
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 @app.route('/api/ai', methods=['POST'])
