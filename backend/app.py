@@ -7,8 +7,14 @@ Responsibilities, in rough order of importance:
    the same room. Socket.IO "rooms" do the addressing for us — `to=room_id`.
 2. **State ownership.** The authoritative file tree per room lives in
    Redis (hot) + PostgreSQL (durable). See `rooms.py` for that layer.
-3. **Side services.** Python code execution (`/api/run`), the Claude-backed AI
-   assistant (`/api/ai`, streamed over SSE), and version snapshots (SQLite).
+3. **Side services.** The Claude-backed AI assistant (`/api/ai`, streamed over
+   SSE) and version snapshots (SQLite).
+
+This server does not execute user code. It used to, via `/api/run`, which
+shelled out to `python3` as the server user — arbitrary code execution for
+anyone who could reach the API. Both languages now run client-side instead:
+JavaScript in the page, Python via Pyodide in a Web Worker. See
+`frontend/src/lib/pythonRunner.ts`.
 
 Concurrency model: eventlet + a single gunicorn worker. That matters — one
 worker means one process holds all the Socket.IO connections, so in-process
@@ -23,11 +29,6 @@ from flask_socketio import SocketIO, join_room, leave_room, emit
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
-import resource
-import shutil
-import subprocess
-import sys
-import tempfile
 import time
 import json
 import sqlite3
@@ -91,8 +92,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', '')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Allowed browser origins. Wildcard CORS on this server meant any page on the
-# internet could call /api/ai (Claude, billed to us) and /api/run. Override with
-# a comma-separated ALLOWED_ORIGINS in the environment when the frontend moves.
+# internet could call /api/ai, which is Claude billed to us. Override with a
+# comma-separated ALLOWED_ORIGINS in the environment when the frontend moves.
 ALLOWED_ORIGINS = [
     o.strip() for o in os.getenv(
         'ALLOWED_ORIGINS',
@@ -570,16 +571,6 @@ def on_switch_file(data):
 def health():
     return {'status': 'ok'}
 
-# Server-side execution runs untrusted code, so it is opt-in rather than
-# opt-out: an operator has to set ENABLE_CODE_EXECUTION=1 deliberately, and
-# should only do so where the process itself is disposable (a per-run container).
-# It is off on the public deployment.
-CODE_EXECUTION_ENABLED = os.getenv('ENABLE_CODE_EXECUTION', '').lower() in ('1', 'true', 'yes')
-
-EXEC_TIMEOUT_SECONDS = 5
-EXEC_MEMORY_BYTES = 256 * 1024 * 1024
-EXEC_MAX_OUTPUT_BYTES = 64 * 1024
-
 # Caps on what one /api/ai call can cost us.
 MAX_HISTORY_TURNS = 20
 MAX_INPUT_CHARS = 50_000
@@ -619,124 +610,6 @@ def rate_limit(bucket: str, limit: int, window_seconds: int):
                 if not [t for t in v if now - t < window_seconds]:
                     _rate_buckets.pop(k, None)
     return True
-
-
-@app.route('/api/run', methods=['POST'])
-def run_code():
-    """Execute code server-side. Python only — JavaScript never reaches here.
-
-    JS runs in the browser instead (see `handleRun` in Room.tsx): zero round
-    trip, and the blast radius is the user's own tab rather than our server.
-
-    Disabled unless ENABLE_CODE_EXECUTION is set — see `run_python` for why.
-    """
-    if not CODE_EXECUTION_ENABLED:
-        return jsonify({
-            'stdout': '',
-            'stderr': 'Server-side Python execution is disabled on this instance.',
-            'elapsed_ms': 0,
-        }), 503
-
-    if not rate_limit('run', limit=10, window_seconds=60):
-        return jsonify({'stdout': '', 'stderr': 'Rate limit exceeded.', 'elapsed_ms': 0}), 429
-
-    data = request.get_json() or {}
-    language = data.get('language', 'python')
-    code = data.get('code', '')
-    if not isinstance(code, str):
-        return jsonify({'error': 'code must be a string'}), 400
-    if len(code) > MAX_INPUT_CHARS:
-        return jsonify({'error': f'code exceeds {MAX_INPUT_CHARS} characters'}), 413
-    if language == 'python':
-        return run_python(code)
-    return jsonify({'error': 'Unsupported language'}), 400
-
-
-def _apply_exec_limits():
-    """Run in the forked child between fork and exec, so these limits bind the
-    interpreter we are about to start and nothing else.
-
-    Each limit is applied independently and best-effort, because support varies
-    by platform: macOS rejects RLIMIT_AS outright, and RLIMIT_NPROC counts
-    processes per real UID so it can fail on a busy host. An exception raised
-    here aborts the whole spawn, so one unsupported limit must not cost us the
-    others — Linux (where this deploys) gets all of them, macOS gets the rest.
-
-    None of these are the primary control. That is `env={}` in the caller.
-    """
-    for limit_name, value in (
-        ('RLIMIT_CPU', (EXEC_TIMEOUT_SECONDS, EXEC_TIMEOUT_SECONDS)),
-        ('RLIMIT_AS', (EXEC_MEMORY_BYTES, EXEC_MEMORY_BYTES)),
-        ('RLIMIT_FSIZE', (1024 * 1024, 1024 * 1024)),
-        ('RLIMIT_CORE', (0, 0)),
-        ('RLIMIT_NPROC', (256, 256)),
-    ):
-        limit = getattr(resource, limit_name, None)
-        if limit is None:
-            continue
-        try:
-            resource.setrlimit(limit, value)
-        except (ValueError, OSError):
-            continue
-
-
-def run_python(code: str):
-    """Write the snippet to a temp file, run it under a constrained interpreter,
-    capture both streams.
-
-    This is defence in depth, not a sandbox, and the distinction matters:
-
-    * `env={}` — the child gets no environment at all, so ANTHROPIC_API_KEY,
-      DATABASE_URL, SECRET_KEY and RESPAN_API_KEY are not readable from it.
-      This is the single most valuable guard here.
-    * `-I` isolates the interpreter (ignores PYTHON* vars and user site-packages)
-      and `-S` skips site entirely, so only the standard library is importable.
-      Drop `-S` if you want third-party imports to work.
-    * `cwd` is a fresh empty directory that is removed afterwards, so relative
-      paths cannot reach the application's own files.
-    * `_apply_exec_limits` caps CPU, address space, and file writes; the
-      `timeout=` still handles the wall-clock case (e.g. `time.sleep`).
-
-    What this still does NOT stop: reading world-readable files by absolute path
-    and making outbound network connections — `urllib` is stdlib. Treat the
-    executing process as hostile. A real boundary is a per-run container
-    (gVisor/Firecracker) or a hosted service like Piston; until this runs inside
-    one, leave ENABLE_CODE_EXECUTION unset in any environment you care about.
-    """
-    start = time.time()
-    workdir = tempfile.mkdtemp(prefix='collabcode-run-')
-    fname = os.path.join(workdir, 'main.py')
-    try:
-        with open(fname, 'w', encoding='utf-8') as f:
-            f.write(code)
-        result = subprocess.run(
-            [sys.executable, '-I', '-S', fname],
-            capture_output=True,
-            text=True,
-            timeout=EXEC_TIMEOUT_SECONDS,
-            cwd=workdir,
-            env={},
-            stdin=subprocess.DEVNULL,
-            preexec_fn=_apply_exec_limits,
-        )
-        elapsed = round((time.time() - start) * 1000)
-        return jsonify({
-            'stdout': result.stdout[:EXEC_MAX_OUTPUT_BYTES],
-            'stderr': result.stderr[:EXEC_MAX_OUTPUT_BYTES],
-            'elapsed_ms': elapsed,
-        })
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            'stdout': '',
-            'stderr': f'Execution timed out ({EXEC_TIMEOUT_SECONDS}s limit)',
-            'elapsed_ms': EXEC_TIMEOUT_SECONDS * 1000,
-        })
-    except Exception:
-        # Never surface the raw exception: it leaks interpreter and filesystem paths.
-        app.logger.exception('code execution failed')
-        return jsonify({'stdout': '', 'stderr': 'Execution failed.', 'elapsed_ms': 0})
-    finally:
-        shutil.rmtree(workdir, ignore_errors=True)
 
 
 @app.route('/api/ai', methods=['POST'])

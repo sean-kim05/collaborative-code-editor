@@ -40,6 +40,7 @@ import { ToastContainer, useToasts } from '../components/Toast/Toast';
 import type { User, RemoteCursor, RemoteSelection, ChatMessage, FileSystem, TypingUser } from '../types';
 import { getUserColor } from '../utils/userColors';
 import { addRecentRoom } from '../utils/recentRooms';
+import { runPython, isPythonWarm } from '../lib/pythonRunner';
 import './Room.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
@@ -453,8 +454,12 @@ export default function Room() {
    * interrupt synchronous code). A Web Worker with a terminate-on-timeout would
    * fix both, at the cost of losing direct console capture.
    *
-   * **Python — on the server.** POSTs to `/api/run`, which shells out with a 5s
-   * timeout. See `run_python` for its own isolation caveats.
+   * **Python — in a Web Worker.** Pyodide (CPython on WebAssembly) runs the
+   * snippet in the user's own tab against an in-memory virtual filesystem. It
+   * used to POST to `/api/run`, which executed it on our server as the server
+   * user; that endpoint is gone. Because the worker can be terminated, Python
+   * gets the hard timeout the JavaScript path above still can't offer.
+   * See `lib/pythonRunner.ts`.
    *
    * The restore of `console.log` is intentionally outside the try/catch's
    * failure path — it runs whether or not the snippet threw, so a throwing
@@ -485,12 +490,10 @@ export default function Room() {
       console.log = origLog; console.error = origErr;
       setOutput({ stdout: logs.join('\n'), stderr: errors.join('\n'), elapsed_ms: Math.round(performance.now() - start) });
     } else {
-      try {
-        const res = await fetch(`${SOCKET_URL}/api/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: 'python', code: activeCode }) });
-        setOutput(await res.json());
-      } catch {
-        setOutput({ stdout: '', stderr: 'Could not reach execution server', elapsed_ms: 0 });
-      }
+      // First run downloads the interpreter (~6MB, then cached by the browser),
+      // which is long enough that a silent spinner reads as a hang.
+      if (!isPythonWarm()) addToast('Starting Python — first run downloads the runtime', 'info');
+      setOutput(await runPython(activeCode));
     }
     setRunning(false);
   }, [activeCode, language]);
